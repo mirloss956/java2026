@@ -1,0 +1,17 @@
+# Maven 編譯產物
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# 系統檔
+.DS_Store
+Thumbs.db
+
+# 應用程式設定（使用者自己的，不上傳）
+~/.fileorganizer/
