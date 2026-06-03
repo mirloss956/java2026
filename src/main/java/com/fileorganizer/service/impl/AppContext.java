@@ -11,9 +11,7 @@ import java.util.List;
  *
  * 應用程式的組裝中心（簡易 DI）。
  * JavaFX App 啟動時呼叫 AppContext.init()，
- * 之後所有 Controller 透過 AppContext.getFacade() 取得 facade。
- *
- * B 的 impl 實作好之後，在這裡替換 null 即可，A 完全不需要改程式碼。
+ * 之後所有 Controller 透過 AppContext.get().getFacade() 取得 facade。
  */
 public class AppContext {
 
@@ -32,15 +30,11 @@ public class AppContext {
                 ? new RuleEngine(rules, config.getTargetDirectory())
                 : new RuleEngine(rules, java.nio.file.Path.of(System.getProperty("user.home"), "整理結果"));
 
-        // --- Service 組裝：B 實作好後在這裡替換 ---
-        // TODO（B）：把下面三個 null 換成對應的 impl
-        //   new FileScanServiceImpl()
-        //   new FileMoveServiceImpl()
-        //   new DuplicateDetectServiceImpl()
+        // --- Service 組裝：B 的三個 impl ---
         this.facade = new OrganizerFacade(
-                null,   // FileScanService    ← B 實作後替換
-                null,   // FileMoveService    ← B 實作後替換
-                null,   // DuplicateDetect    ← B 實作後替換
+                new FileScanServiceImpl(),
+                new FileMoveServiceImpl(),
+                new DuplicateDetectServiceImpl(),
                 new LogServiceImpl(),
                 new FolderWatchServiceImpl(),
                 ruleEngine
@@ -50,7 +44,7 @@ public class AppContext {
     private static List<Rule> buildRules(AppConfig config) {
         return switch (config.getActiveRuleMode()) {
             case "date"   -> List.of(new DateRule());
-            case "custom" -> List.of(new DateRule(), new ExtensionRule()); // 日後擴充
+            case "custom" -> List.of(new DateRule(), new ExtensionRule());
             default       -> List.of(new ExtensionRule());
         };
     }

@@ -7,22 +7,42 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.net.URL;
 
 /**
  * 應用程式進入點。
  * 負責人：C（啟動流程）、A（FXML 和 CSS 路徑）
+ *
+ * 資源路徑約定（A 請對齊這裡）：
+ *   FXML → src/main/resources/fxml/main.fxml
+ *   CSS  → src/main/resources/css/main.css
  */
 public class App extends Application {
+
+    private static final String FXML_PATH = "/fxml/main.fxml";
+    private static final String CSS_PATH  = "/css/main.css";
 
     @Override
     public void start(Stage stage) throws IOException {
         // C：初始化 AppContext（組裝所有 Service）
         AppContext.init();
 
+        // 防禦：提早確認資源存在，讓 A 知道路徑是否對齊
+        URL fxmlUrl = getClass().getResource(FXML_PATH);
+        if (fxmlUrl == null) {
+            throw new IOException("找不到 FXML，請確認檔案存在於：src/main/resources" + FXML_PATH);
+        }
+
         // A：負責建立 main.fxml 和 main.css
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
+        FXMLLoader loader = new FXMLLoader(fxmlUrl);
         Scene scene = new Scene(loader.load(), 960, 640);
-        scene.getStylesheets().add(getClass().getResource("/css/main.css").toExternalForm());
+
+        URL cssUrl = getClass().getResource(CSS_PATH);
+        if (cssUrl != null) {
+            scene.getStylesheets().add(cssUrl.toExternalForm());
+        } else {
+            System.err.println("警告：找不到 CSS，請確認檔案存在於：src/main/resources" + CSS_PATH);
+        }
 
         stage.setTitle("File Organizer");
         stage.setScene(scene);

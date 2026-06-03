@@ -1,8 +1,6 @@
 package com.fileorganizer.rule;
 
 import com.fileorganizer.model.FileItem;
-import com.fileorganizer.model.FileCategory;
-import java.nio.file.Path;
 
 /**
  * 分類規則介面。
