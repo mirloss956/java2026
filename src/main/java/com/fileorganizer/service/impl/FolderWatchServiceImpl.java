@@ -10,6 +10,10 @@ import java.util.function.Consumer;
  * 負責人：C
  * WatchService 實作。用背景執行緒監控資料夾，
  * 有新檔案時透過 Platform.runLater() 通知 A 的 UI callback。
+ *
+ * 修正（⑦）：
+ *  - stopWatch() 補上 executor.shutdownNow()，防止執行緒殘留
+ *  - 新增 shutdown()，供 App.stop() 呼叫做完整資源清理
  */
 public class FolderWatchServiceImpl implements WatchService {
 
@@ -44,7 +48,6 @@ public class FolderWatchServiceImpl implements WatchService {
                         if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
                             Path newFile = directory.resolve((Path) event.context());
                             if (onNewFileDetected != null) {
-                                // 切回 JavaFX UI 執行緒
                                 Platform.runLater(() -> onNewFileDetected.accept(newFile));
                             }
                         }
@@ -63,9 +66,27 @@ public class FolderWatchServiceImpl implements WatchService {
     @Override
     public void stopWatch() {
         watching = false;
+        closeNioWatcher();
+        // ✅ 修正：中斷並關閉執行緒池，防止執行緒殘留
+        executor.shutdownNow();
+    }
+
+    /**
+     * ✅ 新增：完整資源清理，供 App.stop() 在應用程式關閉時呼叫。
+     * 與 stopWatch() 的差異：等待執行緒確實結束（最多 2 秒），
+     * 確保 JVM 能乾淨退出。
+     */
+    public void shutdown() {
+        watching = false;
+        closeNioWatcher();
+        executor.shutdownNow();
         try {
-            if (nioWatcher != null) nioWatcher.close();
-        } catch (Exception ignored) {}
+            if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                System.err.println("WatchService 執行緒未能在時限內結束");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @Override
@@ -74,5 +95,16 @@ public class FolderWatchServiceImpl implements WatchService {
     @Override
     public void setOnNewFileDetected(Consumer<Path> callback) {
         this.onNewFileDetected = callback;
+    }
+
+    // ── 私有工具 ───────────────────────────────────────────────
+
+    private void closeNioWatcher() {
+        try {
+            if (nioWatcher != null) {
+                nioWatcher.close();
+                nioWatcher = null;
+            }
+        } catch (Exception ignored) {}
     }
 }

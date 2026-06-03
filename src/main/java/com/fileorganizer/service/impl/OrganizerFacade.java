@@ -18,27 +18,23 @@ import java.util.function.Consumer;
  * 整合橋接層。A（UI Controller）只需要跟這個類別說話，
  * 不需要知道 B 的任何實作細節。
  *
- * 職責：
- *  1. 把 A 的「掃描 + 整理」指令，按正確順序串接 B 的各個 service
- *  2. 在背景執行緒跑耗時操作，結果切回 JavaFX UI 執行緒
- *  3. 暴露 ObservableList / Property 讓 A 做資料綁定
- *
  * 修正：
  *  - 建構子新增 AppConfig 參數
  *  - scanAsync 依 config.isDetectDuplicates() 決定是否執行重複偵測
+ *  - 新增 setRuleEngine()，供 AppContext.updateRuleMode() 執行期熱替換規則引擎
  */
 public class OrganizerFacade {
 
-    // --- 注入的 Service（B 實作，C 持有）---
     private final FileScanService scanService;
     private final FileMoveService moveService;
     private final DuplicateDetectService duplicateService;
     private final LogService logService;
     private final WatchService watchService;
-    private final RuleEngine ruleEngine;
-    private final AppConfig config;             // ✅ 新增：讀取使用者設定
+    private final AppConfig config;
 
-    // --- A 可以直接 bind 的狀態 ---
+    /** volatile：updateRuleMode() 可能在任意執行緒呼叫，scanAsync 在虛擬執行緒讀取 */
+    private volatile RuleEngine ruleEngine;
+
     private final ObservableList<FileItem> fileItems = FXCollections.observableArrayList();
     private final BooleanProperty busy = new SimpleBooleanProperty(false);
     private final StringProperty statusMessage = new SimpleStringProperty("就緒");
@@ -50,7 +46,7 @@ public class OrganizerFacade {
             LogService logService,
             WatchService watchService,
             RuleEngine ruleEngine,
-            AppConfig config) {             // ✅ 新增參數
+            AppConfig config) {
         this.scanService = scanService;
         this.moveService = moveService;
         this.duplicateService = duplicateService;
@@ -61,14 +57,21 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 掃描（A 拖曳或選擇資料夾後呼叫）
+    // 執行期熱替換規則引擎（⑤）
     // =========================================================
 
     /**
-     * 掃描資料夾，結果更新到 fileItems（ObservableList）。
-     * 在背景執行，完成後自動切回 UI 執行緒。
-     * @param onDone 完成後的回呼（可用來更新 UI 狀態列）
+     * 由 AppContext.updateRuleMode() 呼叫，替換為新規則引擎。
+     * 下次 scanAsync 時自動使用新規則。
      */
+    public void setRuleEngine(RuleEngine ruleEngine) {
+        this.ruleEngine = ruleEngine;
+    }
+
+    // =========================================================
+    // 掃描
+    // =========================================================
+
     public void scanAsync(Path directory, Consumer<Integer> onDone) {
         setBusy(true, "掃描中：" + directory.getFileName());
 
@@ -76,12 +79,12 @@ public class OrganizerFacade {
             try {
                 List<FileItem> result = scanService.scan(directory);
 
-                // ✅ 修正：依 config 開關決定是否執行重複偵測
+                // 依 config 開關決定是否執行重複偵測
                 if (config.isDetectDuplicates()) {
                     duplicateService.detectDuplicates(result);
                 }
 
-                // 套用規則，預先計算 destinationPath
+                // 讀取當下的 ruleEngine（volatile 保證可見性）
                 ruleEngine.applyAll(result);
 
                 Platform.runLater(() -> {
@@ -96,13 +99,9 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 整理（A 按下「開始整理」按鈕後呼叫）
+    // 整理
     // =========================================================
 
-    /**
-     * @param dryRun true = 預覽模式（不實際搬移）
-     * @param onDone 完成後的回呼，傳入 OrganizeResult 供 A 顯示統計
-     */
     public void organizeAsync(boolean dryRun, Consumer<OrganizeResult> onDone) {
         if (fileItems.isEmpty()) {
             setStatus("請先掃描資料夾");
@@ -147,7 +146,7 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // WatchService 控制（A 的監控開關）
+    // WatchService 控制
     // =========================================================
 
     public void startWatch(Path directory) {
@@ -169,7 +168,7 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 日誌查詢（A 的日誌頁面用）
+    // 日誌查詢
     // =========================================================
 
     public List<OrganizeResult> getRecentLogs(int limit) {
@@ -182,17 +181,12 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // JavaFX 可綁定的屬性（A 直接 bind）
+    // JavaFX 可綁定的屬性
     // =========================================================
 
-    /** A 把 TableView 的 items 設成這個 */
-    public ObservableList<FileItem> getFileItems() { return fileItems; }
-
-    /** A 的進度轉圈圈：spinner.visibleProperty().bind(facade.busyProperty()) */
-    public BooleanProperty busyProperty() { return busy; }
-
-    /** A 的狀態列：label.textProperty().bind(facade.statusMessageProperty()) */
-    public StringProperty statusMessageProperty() { return statusMessage; }
+    public ObservableList<FileItem> getFileItems()        { return fileItems; }
+    public BooleanProperty busyProperty()                 { return busy; }
+    public StringProperty statusMessageProperty()         { return statusMessage; }
 
     // =========================================================
     // 私有工具
