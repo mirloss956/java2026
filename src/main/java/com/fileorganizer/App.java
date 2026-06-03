@@ -15,25 +15,23 @@ import java.net.URL;
  *
  * 資源路徑約定（A 請對齊這裡）：
  *   FXML → src/main/resources/fxml/main.fxml
- *   CSS  → src/main/resources/css/main.css
+ *   CSS  → src/main/resources/style.css
  */
 public class App extends Application {
 
     private static final String FXML_PATH = "/fxml/main.fxml";
-    private static final String CSS_PATH  = "/css/main.css";
+    private static final String CSS_PATH  = "/style.css";
 
     @Override
     public void start(Stage stage) throws IOException {
         // C：初始化 AppContext（組裝所有 Service）
         AppContext.init();
 
-        // 防禦：提早確認資源存在，讓 A 知道路徑是否對齊
         URL fxmlUrl = getClass().getResource(FXML_PATH);
         if (fxmlUrl == null) {
             throw new IOException("找不到 FXML，請確認檔案存在於：src/main/resources" + FXML_PATH);
         }
 
-        // A：負責建立 main.fxml 和 main.css
         FXMLLoader loader = new FXMLLoader(fxmlUrl);
         Scene scene = new Scene(loader.load(), 960, 640);
 
@@ -51,7 +49,6 @@ public class App extends Application {
 
     @Override
     public void stop() {
-        // 應用程式關閉時停止監控
         AppContext.get().getFacade().stopWatch();
     }
 
