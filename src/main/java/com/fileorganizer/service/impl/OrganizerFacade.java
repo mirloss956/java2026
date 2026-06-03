@@ -1,5 +1,6 @@
 package com.fileorganizer.service.impl;
 
+import com.fileorganizer.config.AppConfig;
 import com.fileorganizer.model.*;
 import com.fileorganizer.rule.RuleEngine;
 import com.fileorganizer.service.*;
@@ -8,7 +9,6 @@ import javafx.beans.property.*;
 import javafx.collections.*;
 
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -22,6 +22,10 @@ import java.util.function.Consumer;
  *  1. 把 A 的「掃描 + 整理」指令，按正確順序串接 B 的各個 service
  *  2. 在背景執行緒跑耗時操作，結果切回 JavaFX UI 執行緒
  *  3. 暴露 ObservableList / Property 讓 A 做資料綁定
+ *
+ * 修正：
+ *  - 建構子新增 AppConfig 參數
+ *  - scanAsync 依 config.isDetectDuplicates() 決定是否執行重複偵測
  */
 public class OrganizerFacade {
 
@@ -32,6 +36,7 @@ public class OrganizerFacade {
     private final LogService logService;
     private final WatchService watchService;
     private final RuleEngine ruleEngine;
+    private final AppConfig config;             // ✅ 新增：讀取使用者設定
 
     // --- A 可以直接 bind 的狀態 ---
     private final ObservableList<FileItem> fileItems = FXCollections.observableArrayList();
@@ -44,13 +49,15 @@ public class OrganizerFacade {
             DuplicateDetectService duplicateService,
             LogService logService,
             WatchService watchService,
-            RuleEngine ruleEngine) {
+            RuleEngine ruleEngine,
+            AppConfig config) {             // ✅ 新增參數
         this.scanService = scanService;
         this.moveService = moveService;
         this.duplicateService = duplicateService;
         this.logService = logService;
         this.watchService = watchService;
         this.ruleEngine = ruleEngine;
+        this.config = config;
     }
 
     // =========================================================
@@ -69,8 +76,10 @@ public class OrganizerFacade {
             try {
                 List<FileItem> result = scanService.scan(directory);
 
-                // 若啟用重複偵測
-                duplicateService.detectDuplicates(result);
+                // ✅ 修正：依 config 開關決定是否執行重複偵測
+                if (config.isDetectDuplicates()) {
+                    duplicateService.detectDuplicates(result);
+                }
 
                 // 套用規則，預先計算 destinationPath
                 ruleEngine.applyAll(result);
@@ -112,7 +121,7 @@ public class OrganizerFacade {
                 }
 
                 Platform.runLater(() -> {
-                    fileItems.setAll(result.getItems()); // 更新 status 顯示
+                    fileItems.setAll(result.getItems());
                     setBusy(false, buildSummary(result, dryRun));
                     if (onDone != null) onDone.accept(result);
                 });
@@ -143,9 +152,8 @@ public class OrganizerFacade {
 
     public void startWatch(Path directory) {
         watchService.setOnNewFileDetected(newFile -> {
-            // 已在 UI 執行緒（FolderWatchServiceImpl 內有 Platform.runLater）
             setStatus("偵測到新檔案：" + newFile.getFileName());
-            scanAsync(directory, null); // 自動重新掃描
+            scanAsync(directory, null);
         });
         watchService.startWatch(directory);
         setStatus("即時監控已啟動");
