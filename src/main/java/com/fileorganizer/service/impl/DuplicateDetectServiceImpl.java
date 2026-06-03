@@ -32,9 +32,8 @@ public class DuplicateDetectServiceImpl implements DuplicateDetectService {
             // 如果這個檔案之前已經算過雜湊值，就不用重複計算（延遲計算優化）
             if (item.getChecksum() == null || item.getChecksum().isEmpty()) {
                 try {
-                    // 呼叫 C 同學的工具類別計算 MD5
-                    // ⚠️ 注意：若 FileHashUtil 的方法名不同（例如叫 calculate），請自行修正
-                    String md5 = FileHashUtil.calculateMD5(item.getSourcePath());
+                    // 💡 修正 ❶：將 FileHashUtil.calculateMD5 改為 C 同學定義的 md5
+                    String md5 = FileHashUtil.md5(item.getSourcePath());
                     item.setChecksum(md5);
                 } catch (Exception e) {
                     System.err.println("計算檔案雜湊值失敗: " + item.getFileName() + " -> " + e.getMessage());
