@@ -4,6 +4,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
+
 <VBox prefHeight="600.0" prefWidth="800.0" spacing="10.0" stylesheets="@../css/style.css" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.fileorganizer.controller.MainController">
     <children>
         <HBox alignment="CENTER_LEFT" spacing="15.0" styleClass="section-box">
@@ -41,12 +42,14 @@
                                 <TableColumn fx:id="colPath" prefWidth="200.0" text="原始路徑" />
                                 <TableColumn fx:id="colSize" prefWidth="80.0" text="大小" />
                                 <TableColumn fx:id="colStatus" prefWidth="100.0" text="狀態" />
+
                             </columns>
                         </TableView>
                     </children>
                 </VBox>
             </items>
         </SplitPane>
+
     </children>
     <padding>
         <Insets bottom="15.0" left="15.0" right="15.0" top="15.0" />
