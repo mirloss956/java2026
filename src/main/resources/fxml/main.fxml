@@ -4,64 +4,45 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox prefHeight="650.0" prefWidth="900.0" spacing="10.0"
-      stylesheets="@../css/style.css"
-      xmlns="http://javafx.com/javafx/17"
-      xmlns:fx="http://javafx.com/fxml/1"
-      fx:controller="com.fileorganizer.controller.MainController">
-    <padding>
-        <Insets bottom="15.0" left="15.0" right="15.0" top="15.0"/>
-    </padding>
-    <children>
 
-        <!-- 頂部工具列 -->
+<VBox prefHeight="600.0" prefWidth="800.0" spacing="10.0" stylesheets="@../css/style.css" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.fileorganizer.controller.MainController">
+    <children>
         <HBox alignment="CENTER_LEFT" spacing="15.0" styleClass="section-box">
             <children>
-                <Label style="-fx-font-weight: bold;" text="整理設定："/>
-                <CheckBox fx:id="chkDryRun" selected="true" text="預覽模式（不實際搬移）"/>
-                <CheckBox fx:id="chkDetectDup" selected="true" text="偵測重複檔案"/>
-                <Button mnemonicParsing="false" onAction="#handleOrganize"
-                        style="-fx-background-color:#2980b9;-fx-text-fill:white;-fx-background-radius:5;"
-                        text="▶ 開始整理"/>
-                <Button mnemonicParsing="false" onAction="#handleUndo"
-                        styleClass="button-secondary" text="↩ 復原上一次操作"/>
-                <ProgressIndicator fx:id="spinner" prefHeight="20.0" prefWidth="20.0" visible="false"/>
+                <Label style="-fx-font-weight: bold;" text="分類規則設定：" />
+                <CheckBox fx:id="chkDryRun" selected="true" text="依副檔名分類" />
+                <CheckBox fx:id="spinner" text="偵測重複檔案" />
+                <Button fx:id="btnUndo" mnemonicParsing="false" onAction="#handleUndo" styleClass="button-secondary" text="↩ 復原上一次操作" />
             </children>
+            <VBox.margin>
+                <Insets />
+            </VBox.margin>
         </HBox>
 
-        <!-- 拖曳面板 -->
-        <VBox fx:id="dropPane" alignment="CENTER"
-              onDragDropped="#handleDragDropped" onDragOver="#handleDragOver"
-              prefHeight="130.0" styleClass="drop-shadow-pane" VBox.vgrow="NEVER">
+        <VBox fx:id="dropPane" alignment="CENTER" onDragDropped="#handleDragDropped" onDragOver="#handleDragOver" prefHeight="150.0" styleClass="drop-shadow-pane" VBox.vgrow="NEVER">
             <children>
-                <Label style="-fx-font-size: 15px; -fx-text-fill: #7f8c8d;"
-                       text="📂 將要整理的資料夾拖曳至此處，或點擊選擇資料夾"/>
+                <Label fx:id="lblDropHint" style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;" text="📂 將要整理的資料夾拖曳至此處，或點擊選擇資料夾" />
             </children>
         </VBox>
 
-        <!-- 主內容區：日誌 + 檔案清單 -->
-        <SplitPane dividerPositions="0.38" VBox.vgrow="ALWAYS">
+        <SplitPane dividerPositions="0.4" prefHeight="200.0" prefWidth="200.0" VBox.vgrow="ALWAYS">
             <items>
-                <!-- 左：日誌 -->
                 <VBox spacing="5.0">
                     <children>
-                        <Label style="-fx-font-weight: bold;" text="執行日誌："/>
-                        <TextArea fx:id="lblStatus" editable="false"
-                                  styleClass="log-area" VBox.vgrow="ALWAYS"
-                                  wrapText="true"/>
+                        <Label style="-fx-font-weight: bold;" text="執行進度與日誌：" />
+                        <TextArea fx:id="lblStatus" editable="false" prefHeight="200.0" prefWidth="200.0" styleClass="log-area" VBox.vgrow="ALWAYS" />
                     </children>
                 </VBox>
-
-                <!-- 右：檔案清單 -->
                 <VBox spacing="5.0">
                     <children>
-                        <Label style="-fx-font-weight: bold;" text="檔案處理清單："/>
-                        <TableView fx:id="fileTable" VBox.vgrow="ALWAYS">
+                        <Label style="-fx-font-weight: bold;" text="檔案處理清單：" />
+                        <TableView fx:id="fileTable" prefHeight="200.0" prefWidth="200.0" VBox.vgrow="ALWAYS">
                             <columns>
-                                <TableColumn fx:id="colName"   prefWidth="160.0" text="檔案名稱"/>
-                                <TableColumn fx:id="colPath"   prefWidth="220.0" text="原始路徑"/>
-                                <TableColumn fx:id="colSize"   prefWidth="80.0"  text="大小（bytes）"/>
-                                <TableColumn fx:id="colStatus" prefWidth="100.0" text="狀態"/>
+                                <TableColumn fx:id="colName" prefWidth="150.0" text="檔案名稱" />
+                                <TableColumn fx:id="colPath" prefWidth="200.0" text="原始路徑" />
+                                <TableColumn fx:id="colSize" prefWidth="80.0" text="大小" />
+                                <TableColumn fx:id="colStatus" prefWidth="100.0" text="狀態" />
+
                             </columns>
                         </TableView>
                     </children>
@@ -70,4 +51,7 @@
         </SplitPane>
 
     </children>
+    <padding>
+        <Insets bottom="15.0" left="15.0" right="15.0" top="15.0" />
+    </padding>
 </VBox>

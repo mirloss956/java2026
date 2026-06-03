@@ -1,5 +1,6 @@
 package com.fileorganizer;
 
+
 import com.fileorganizer.service.impl.AppContext;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -50,9 +51,11 @@ public class App extends Application {
     @Override
     public void stop() {
         AppContext.get().getFacade().stopWatch();
+
     }
 
     public static void main(String[] args) {
         launch(args);
     }
 }
+
