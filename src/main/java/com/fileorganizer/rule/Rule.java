@@ -2,11 +2,6 @@ package com.fileorganizer.rule;
 
 import com.fileorganizer.model.FileItem;
 
-/**
- * 分類規則介面。
- * C 實作預設規則，使用者自訂規則也實作此介面。
- * B 和 A 不需要知道規則細節，只需呼叫 RuleEngine.apply()。
- */
 public interface Rule {
 
     /** 規則名稱（顯示在 UI 設定面板） */
