@@ -1,0 +1,57 @@
+/* 全局基礎設定 */
+.root {
+    -fx-font-family: "Microsoft JhengHei", "Segoe UI", sans-serif;
+    -fx-background-color: #f8f9fa;
+}
+
+/* 區塊容器 */
+.section-box {
+    -fx-background-color: #ffffff;
+    -fx-padding: 12px;
+    -fx-background-radius: 8px;
+    -fx-border-color: #e9ecef;
+    -fx-border-radius: 8px;
+}
+
+/* 拖曳面板外觀與陰影效果 */
+.drop-shadow-pane {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #cbd5e1;
+    -fx-border-width: 2px;
+    -fx-border-style: dashed;
+    -fx-background-radius: 10px;
+    -fx-border-radius: 10px;
+    -fx-cursor: hand;
+}
+.drop-shadow-pane:hover {
+    -fx-background-color: #f1f5f9;
+    -fx-border-color: #94a3b8;
+}
+
+/* 按鈕樣式 */
+.button-secondary {
+    -fx-background-color: #6c757d;
+    -fx-text-fill: white;
+    -fx-background-radius: 5px;
+    -fx-cursor: hand;
+}
+.button-secondary:hover {
+    -fx-background-color: #5a6268;
+}
+
+/* 日誌區域 */
+.log-area {
+    -fx-control-inner-background: #212529;
+    -fx-text-fill: #00ff66;
+    -fx-font-family: "Consolas", monospace;
+}
+
+/* 表格優化 */
+.table-view {
+    -fx-background-radius: 6px;
+    -fx-border-color: #dee2e6;
+    -fx-border-radius: 6px;
+}
+.table-view .column-header {
+    -fx-background-color: #e9ecef;
+}
