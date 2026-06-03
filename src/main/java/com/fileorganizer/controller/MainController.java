@@ -1,5 +1,6 @@
 package com.fileorganizer.controller;
 
+
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -69,6 +70,7 @@ public class MainController {
     void handleDragDropped(DragEvent event) {
         boolean success = false;
         if (event.getDragboard().hasFiles()) {
+
             File file = event.getDragboard().getFiles().get(0);
             if (file.isDirectory()) {
                 triggerFileProcess(file.getAbsolutePath());

@@ -1,0 +1,63 @@
+package com.fileorganizer.service.impl;
+
+import com.fileorganizer.config.AppConfig;
+import com.fileorganizer.config.ConfigLoader;
+import com.fileorganizer.rule.*;
+
+import java.util.List;
+
+/**
+ * 負責人：C
+ *
+ * 應用程式的組裝中心（簡易 DI）。
+ * JavaFX App 啟動時呼叫 AppContext.init()，
+ * 之後所有 Controller 透過 AppContext.get().getFacade() 取得 facade。
+ */
+public class AppContext {
+
+    private static AppContext instance;
+
+    private final AppConfig config;
+    private final OrganizerFacade facade;
+
+    private AppContext() {
+        ConfigLoader loader = new ConfigLoader();
+        this.config = loader.load();
+
+        // --- 規則引擎：C 組裝 ---
+        List<Rule> rules = buildRules(config);
+        RuleEngine ruleEngine = config.getTargetDirectory() != null
+                ? new RuleEngine(rules, config.getTargetDirectory())
+                : new RuleEngine(rules, java.nio.file.Path.of(System.getProperty("user.home"), "整理結果"));
+
+        // --- Service 組裝：B 的三個 impl ---
+        this.facade = new OrganizerFacade(
+                new FileScanServiceImpl(),
+                new FileMoveServiceImpl(),
+                new DuplicateDetectServiceImpl(),
+                new LogServiceImpl(),
+                new FolderWatchServiceImpl(),
+                ruleEngine
+        );
+    }
+
+    private static List<Rule> buildRules(AppConfig config) {
+        return switch (config.getActiveRuleMode()) {
+            case "date"   -> List.of(new DateRule());
+            case "custom" -> List.of(new DateRule(), new ExtensionRule());
+            default       -> List.of(new ExtensionRule());
+        };
+    }
+
+    public static void init() {
+        instance = new AppContext();
+    }
+
+    public static AppContext get() {
+        if (instance == null) throw new IllegalStateException("AppContext 尚未初始化，請先呼叫 init()");
+        return instance;
+    }
+
+    public OrganizerFacade getFacade() { return facade; }
+    public AppConfig getConfig()       { return config; }
+}
