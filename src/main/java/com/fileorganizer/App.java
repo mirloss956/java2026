@@ -1,6 +1,5 @@
 package com.fileorganizer;
 
-
 import com.fileorganizer.service.impl.AppContext;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -25,7 +24,6 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) throws IOException {
-        // C：初始化 AppContext（組裝所有 Service）
         AppContext.init();
 
         URL fxmlUrl = getClass().getResource(FXML_PATH);
@@ -50,12 +48,11 @@ public class App extends Application {
 
     @Override
     public void stop() {
-        AppContext.get().getFacade().stopWatch();
-
+        // shutdown() 會等待 WatchService 執行緒確實結束，確保 JVM 乾淨退出
+        AppContext.get().getFacade().shutdown();
     }
 
     public static void main(String[] args) {
         launch(args);
     }
 }
-
