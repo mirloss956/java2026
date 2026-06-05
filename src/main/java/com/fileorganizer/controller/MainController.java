@@ -6,6 +6,7 @@ import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.VBox;
@@ -13,27 +14,25 @@ import javafx.stage.DirectoryChooser;
 
 import com.fileorganizer.config.AppConfig;
 import com.fileorganizer.model.FileItem;
-import com.fileorganizer.model.OrganizeResult;
-import com.fileorganizer.service.impl.AppContext;          // ✅ 修正：正確 package
-import com.fileorganizer.service.impl.OrganizerFacade;    // ✅ 補充：讓 facade 型別明確
+import com.fileorganizer.service.impl.AppContext;
+import com.fileorganizer.service.impl.OrganizerFacade;
 
 import java.io.File;
 import java.nio.file.Path;
 
 public class MainController {
 
-    @FXML private TableView<FileItem> fileTable;
-    @FXML private TextArea lblStatus;
-    @FXML private CheckBox chkDryRun;
-    @FXML private CheckBox toggleWatch;
-    @FXML private VBox dropPane;
+    @FXML private TableView<FileItem>            fileTable;
+    @FXML private TextArea                        lblStatus;
+    @FXML private CheckBox                        chkDryRun;
+    @FXML private CheckBox                        toggleWatch;
+    @FXML private VBox                            dropPane;
 
-    @FXML private TableColumn<FileItem, String> colName;
-    @FXML private TableColumn<FileItem, String> colPath;
-    @FXML private TableColumn<FileItem, String> colSize;
-    @FXML private TableColumn<FileItem, String> colStatus;
+    @FXML private TableColumn<FileItem, String>  colName;
+    @FXML private TableColumn<FileItem, String>  colPath;
+    @FXML private TableColumn<FileItem, String>  colSize;
+    @FXML private TableColumn<FileItem, String>  colStatus;
 
-    private final ObservableList<FileItem> fileDataList = FXCollections.observableArrayList();
     private AppConfig currentConfig;
 
     @FXML
@@ -41,37 +40,47 @@ public class MainController {
         OrganizerFacade facade = AppContext.get().getFacade();
         currentConfig = AppContext.get().getConfig();
 
-        // 直接 bind facade 的 ObservableList，不再用本地 fileDataList
+        // ── TableView ────────────────────────────────────────────────────────
         if (fileTable != null) {
             fileTable.setItems(facade.getFileItems());
+
+            if (colName   != null) colName  .setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().getFileName()));
+            if (colPath   != null) colPath  .setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().getSourcePath().toString()));
+            if (colSize   != null) colSize  .setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(formatSize(cd.getValue().getSizeBytes())));
+            if (colStatus != null) colStatus.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().getStatus().name()));
         }
 
-        // 狀態列 bind
+        // ── 狀態列 bind ───────────────────────────────────────────────────────
         if (lblStatus != null) {
             facade.statusMessageProperty().addListener(
                 (obs, oldVal, newVal) -> Platform.runLater(() -> lblStatus.appendText(newVal + "\n"))
             );
         }
 
-        // 預覽模式 CheckBox 預設值對齊 config
+        // ── 預覽模式 CheckBox ─────────────────────────────────────────────────
         if (chkDryRun != null) {
             chkDryRun.setSelected(currentConfig.isDryRunDefault());
         }
 
-        // 監控開關 CheckBox 預設值對齊 config
+        // ── 監控開關 CheckBox ─────────────────────────────────────────────────
         if (toggleWatch != null) {
             toggleWatch.setSelected(currentConfig.isWatchEnabled());
             toggleWatch.selectedProperty().addListener((obs, oldVal, isOn) -> {
                 if (isOn) {
                     Path src = currentConfig.getSourceDirectory();
-                    if (src != null) facade.startWatch(src);
+                    if (src != null) {
+                        facade.startWatch(src);
+                    } else {
+                        if (lblStatus != null) lblStatus.appendText("[警告] 尚未設定來源資料夾，無法啟動監控。\n");
+                        toggleWatch.setSelected(false);
+                    }
                 } else {
                     facade.stopWatch();
                 }
             });
         }
 
-        // 拖曳面板點擊 → 開啟資料夾選擇器
+        // ── 拖曳面板點擊 → 開啟資料夾選擇器 ──────────────────────────────────
         if (dropPane != null) {
             dropPane.setOnMouseClicked(event -> {
                 DirectoryChooser chooser = new DirectoryChooser();
@@ -83,6 +92,8 @@ public class MainController {
             });
         }
     }
+
+    // ── FXML handlers ────────────────────────────────────────────────────────
 
     @FXML
     void handleDragOver(DragEvent event) {
@@ -116,7 +127,7 @@ public class MainController {
     void handleOrganize(ActionEvent event) {
         boolean dryRun = chkDryRun != null && chkDryRun.isSelected();
         AppContext.get().getFacade().organizeAsync(dryRun, result -> {
-            // result 已在 UI 執行緒，需要時可再做額外操作
+            // result 已在 UI 執行緒；狀態列由 statusMessageProperty listener 自動更新
         });
     }
 
@@ -129,7 +140,15 @@ public class MainController {
 
     private void triggerScan(Path directory) {
         AppContext.get().getFacade().scanAsync(directory, count -> {
-            // count 已在 UI 執行緒，狀態列由 statusMessageProperty listener 自動更新
+            // count 已在 UI 執行緒；狀態列由 statusMessageProperty listener 自動更新
         });
+    }
+
+    /** 將 byte 數格式化為人類可讀字串，例如 1.2 MB */
+    private static String formatSize(long bytes) {
+        if (bytes < 1024)                    return bytes + " B";
+        if (bytes < 1024 * 1024)             return String.format("%.1f KB", bytes / 1024.0);
+        if (bytes < 1024 * 1024 * 1024)      return String.format("%.1f MB", bytes / (1024.0 * 1024));
+        return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
     }
 }

@@ -13,18 +13,13 @@ import java.util.List;
  * 應用程式的組裝中心（簡易 DI）。
  * JavaFX App 啟動時呼叫 AppContext.init()，
  * 之後所有 Controller 透過 AppContext.get().getFacade() 取得 facade。
- *
- * 修正：
- *  - 持有 ConfigLoader 實例，暴露 saveConfig() 供 A 存檔
- *  - 將 config 注入 OrganizerFacade，讓 facade 能讀取 detectDuplicates 開關
- *  - 新增 updateRuleMode(String)，支援執行期切換規則不重啟應用
  */
 public class AppContext {
 
     private static AppContext instance;
 
-    private final AppConfig config;
-    private final ConfigLoader configLoader;
+    private final AppConfig      config;
+    private final ConfigLoader   configLoader;
     private final OrganizerFacade facade;
 
     private AppContext() {
@@ -49,14 +44,12 @@ public class AppContext {
     }
 
     // =========================================================
-    // 執行期切換規則（⑤）
+    // 執行期切換規則
     // =========================================================
 
     /**
      * 切換規則模式並立即生效，不需重啟應用程式。
      * A 在設定頁面切換 RadioButton 後呼叫此方法。
-     *
-     * 用法：AppContext.get().updateRuleMode("date");
      *
      * @param mode "extension" | "date" | "custom"
      */

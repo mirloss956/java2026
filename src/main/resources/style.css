@@ -13,7 +13,7 @@
     -fx-border-radius: 8px;
 }
 
-/* 拖曳面板外觀與陰影效果 */
+/* 拖曳面板 */
 .drop-shadow-pane {
     -fx-background-color: #ffffff;
     -fx-border-color: #cbd5e1;
@@ -28,7 +28,19 @@
     -fx-border-color: #94a3b8;
 }
 
-/* 按鈕樣式 */
+/* 主要按鈕（開始整理） */
+.button-primary {
+    -fx-background-color: #2980b9;
+    -fx-text-fill: white;
+    -fx-background-radius: 5px;
+    -fx-cursor: hand;
+    -fx-font-weight: bold;
+}
+.button-primary:hover {
+    -fx-background-color: #1f6391;
+}
+
+/* 次要按鈕（復原） */
 .button-secondary {
     -fx-background-color: #6c757d;
     -fx-text-fill: white;
@@ -46,7 +58,7 @@
     -fx-font-family: "Consolas", monospace;
 }
 
-/* 表格優化 */
+/* 表格 */
 .table-view {
     -fx-background-radius: 6px;
     -fx-border-color: #dee2e6;
