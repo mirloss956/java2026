@@ -18,8 +18,8 @@ public class AppContext {
 
     private static AppContext instance;
 
-    private final AppConfig      config;
-    private final ConfigLoader   configLoader;
+    private final AppConfig       config;
+    private final ConfigLoader    configLoader;
     private final OrganizerFacade facade;
 
     private AppContext() {
@@ -32,6 +32,7 @@ public class AppContext {
 
         RuleEngine ruleEngine = new RuleEngine(buildRules(config), targetRoot);
 
+        // OrganizerFacade 需要 7 個參數（含 config），務必保持一致
         this.facade = new OrganizerFacade(
                 new FileScanServiceImpl(),
                 new FileMoveServiceImpl(),
@@ -39,17 +40,16 @@ public class AppContext {
                 new LogServiceImpl(),
                 new FolderWatchServiceImpl(),
                 ruleEngine,
-                config
+                config                          // ← 第 7 個，勿省略
         );
     }
 
     // =========================================================
-    // 執行期切換規則
+    // 執行期切換規則（A 在設定頁面切換後呼叫）
     // =========================================================
 
     /**
      * 切換規則模式並立即生效，不需重啟應用程式。
-     * A 在設定頁面切換 RadioButton 後呼叫此方法。
      *
      * @param mode "extension" | "date" | "custom"
      */
@@ -65,10 +65,9 @@ public class AppContext {
     }
 
     // =========================================================
-    // 設定存檔
+    // 設定存檔（A 修改設定後呼叫此方法持久化）
     // =========================================================
 
-    /** 將目前 config 寫回磁碟。A 修改設定後呼叫此方法持久化。 */
     public void saveConfig() {
         configLoader.save(config);
     }
@@ -82,7 +81,9 @@ public class AppContext {
     }
 
     public static AppContext get() {
-        if (instance == null) throw new IllegalStateException("AppContext 尚未初始化，請先呼叫 init()");
+        if (instance == null) {
+            throw new IllegalStateException("AppContext 尚未初始化，請先呼叫 init()");
+        }
         return instance;
     }
 

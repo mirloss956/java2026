@@ -12,6 +12,9 @@ import java.util.function.Consumer;
  *
  * WatchService 實作。用背景執行緒監控資料夾，
  * 有新檔案時透過 Platform.runLater() 通知 A 的 UI callback。
+ *
+ * 修正：shutdown() 加入 awaitTermination(2s)，
+ * 確保 JVM 退出前執行緒確實結束，而非僅 shutdownNow() 就回傳。
  */
 public class FolderWatchServiceImpl implements WatchService {
 
@@ -67,15 +70,24 @@ public class FolderWatchServiceImpl implements WatchService {
         try {
             if (nioWatcher != null) nioWatcher.close();
         } catch (Exception ignored) {}
-        executor.shutdownNow();
     }
 
     /**
-     * 供 App.stop() 呼叫，確保 executor 完整釋放。
-     * stopWatch() 已含 shutdownNow()，此方法作為語意更明確的別名保留。
+     * 供 App.stop() 呼叫。
+     * stopWatch() 令 watching = false 並關閉 nioWatcher，
+     * 再 shutdownNow() + awaitTermination 等待執行緒確實結束，
+     * 避免 JVM 在 daemon thread 未結束時強制退出造成資源洩漏。
      */
     public void shutdown() {
         stopWatch();
+        executor.shutdownNow();
+        try {
+            if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                System.err.println("WatchService 執行緒未能在 2 秒內結束");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @Override

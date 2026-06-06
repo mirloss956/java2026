@@ -14,17 +14,22 @@ import java.util.*;
  * 負責人：C
  * 用 SQLite 儲存每次整理操作的結果。
  * DB 檔案放在 ~/.fileorganizer/log.db
+ *
+ * 修正：DB_URL 改用 toAbsolutePath().toString()，
+ * 避免 Windows 路徑（含反斜線）導致 SQLite driver 解析錯誤。
  */
 public class LogServiceImpl implements LogService {
 
-    private static final Path DB_DIR  = Path.of(System.getProperty("user.home"), ".fileorganizer");
-    private static final String DB_URL = "jdbc:sqlite:" + DB_DIR.resolve("log.db");
+    private static final Path DB_DIR = Path.of(System.getProperty("user.home"), ".fileorganizer");
+    // 修正：使用 toAbsolutePath().toString() 確保跨平台路徑正確
+    private static final String DB_URL =
+            "jdbc:sqlite:" + DB_DIR.resolve("log.db").toAbsolutePath().toString();
 
     public LogServiceImpl() {
         initSchema();
     }
 
-    // --- schema 初始化（只在第一次呼叫時建表）---
+    // ── schema 初始化（只在第一次呼叫時建表）────────────────────────────────
 
     private void initSchema() {
         try {
@@ -63,7 +68,7 @@ public class LogServiceImpl implements LogService {
         }
     }
 
-    // --- LogService 實作 ---
+    // ── LogService 實作 ──────────────────────────────────────────────────────
 
     @Override
     public void save(OrganizeResult result) {
@@ -80,7 +85,8 @@ public class LogServiceImpl implements LogService {
             try {
                 // 1. 寫入 session
                 long sessionId;
-                try (PreparedStatement ps = conn.prepareStatement(insertSession, Statement.RETURN_GENERATED_KEYS)) {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        insertSession, Statement.RETURN_GENERATED_KEYS)) {
                     ps.setString(1, result.getExecutedAt().toString());
                     ps.setInt(2, result.getTotalCount());
                     ps.setInt(3, result.getMovedCount());
@@ -138,7 +144,6 @@ public class LogServiceImpl implements LogService {
                     long sessionId = rs.getLong("id");
                     LocalDateTime execAt = LocalDateTime.parse(rs.getString("executed_at"));
 
-                    // 重建 FileItem 清單
                     List<FileItem> items = new ArrayList<>();
                     try (PreparedStatement fps = conn.prepareStatement(fileQuery)) {
                         fps.setLong(1, sessionId);

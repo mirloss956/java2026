@@ -24,6 +24,7 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) throws IOException {
+        // C：初始化 AppContext（組裝所有 Service）
         AppContext.init();
 
         URL fxmlUrl = getClass().getResource(FXML_PATH);
