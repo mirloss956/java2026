@@ -4,7 +4,6 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *  3. JSON 損毀 / 空白檔案 → 回傳預設值，不 crash
  *  4. null Path 欄位存讀不 crash
  *  5. boolean 欄位正確往返
+ *  6. 覆寫存檔（多次 save 取最新）
  */
 class ConfigLoaderTest {
 
@@ -28,9 +28,7 @@ class ConfigLoaderTest {
     private ConfigLoader loader;
 
     @BeforeEach
-    void setUp() throws Exception {
-        // 將 ConfigLoader 的靜態 CONFIG_DIR / CONFIG_FILE 重導向到 TempDir，
-        // 避免測試污染 user.home 下的真實設定檔。
+    void setUp() {
         loader = new ConfigLoader(tempDir);
     }
 
@@ -58,11 +56,11 @@ class ConfigLoaderTest {
         AppConfig cfg = loader.load();
 
         assertNotNull(cfg);
-        assertNull(cfg.getSourceDirectory(),   "首次啟動 sourceDirectory 應為 null");
-        assertNull(cfg.getTargetDirectory(),   "首次啟動 targetDirectory 應為 null");
-        assertFalse(cfg.isWatchEnabled(),      "預設 watchEnabled = false");
-        assertTrue(cfg.isDryRunDefault(),      "預設 dryRunDefault = true");
-        assertTrue(cfg.isDetectDuplicates(),   "預設 detectDuplicates = true");
+        assertNull(cfg.getSourceDirectory(),  "首次啟動 sourceDirectory 應為 null");
+        assertNull(cfg.getTargetDirectory(),  "首次啟動 targetDirectory 應為 null");
+        assertFalse(cfg.isWatchEnabled(),     "預設 watchEnabled = false");
+        assertTrue(cfg.isDryRunDefault(),     "預設 dryRunDefault = true");
+        assertTrue(cfg.isDetectDuplicates(),  "預設 detectDuplicates = true");
         assertEquals("extension", cfg.getActiveRuleMode(), "預設 activeRuleMode = extension");
     }
 
@@ -95,8 +93,8 @@ class ConfigLoaderTest {
         AppConfig cfg = new AppConfig();
         // sourceDirectory / targetDirectory 保持 null（預設值）
 
-        assertDoesNotThrow(() -> loader.save(cfg),   "null Path 存檔時不應拋出例外");
-        assertDoesNotThrow(() -> loader.load(),       "含 null Path 的 JSON 讀取時不應拋出例外");
+        assertDoesNotThrow(() -> loader.save(cfg),  "null Path 存檔時不應拋出例外");
+        assertDoesNotThrow(() -> loader.load(),      "含 null Path 的 JSON 讀取時不應拋出例外");
 
         AppConfig loaded = loader.load();
         assertNull(loaded.getSourceDirectory());
