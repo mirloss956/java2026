@@ -1,10 +1,10 @@
-/* 全局基礎設定 */
+/* ── 全局基礎設定 ─────────────────────────────────────────────── */
 .root {
     -fx-font-family: "Microsoft JhengHei", "Segoe UI", sans-serif;
     -fx-background-color: #f8f9fa;
 }
 
-/* 區塊容器 */
+/* ── 區塊容器 ────────────────────────────────────────────────── */
 .section-box {
     -fx-background-color: #ffffff;
     -fx-padding: 12px;
@@ -13,7 +13,7 @@
     -fx-border-radius: 8px;
 }
 
-/* 拖曳面板 */
+/* ── 拖曳面板 ────────────────────────────────────────────────── */
 .drop-shadow-pane {
     -fx-background-color: #ffffff;
     -fx-border-color: #cbd5e1;
@@ -28,19 +28,22 @@
     -fx-border-color: #94a3b8;
 }
 
-/* 主要按鈕（開始整理） */
+/* ── 按鈕：主要（開始整理）────────────────────────────────────── */
 .button-primary {
-    -fx-background-color: #2980b9;
+    -fx-background-color: #2563eb;
     -fx-text-fill: white;
+    -fx-font-weight: bold;
     -fx-background-radius: 5px;
     -fx-cursor: hand;
-    -fx-font-weight: bold;
 }
 .button-primary:hover {
-    -fx-background-color: #1f6391;
+    -fx-background-color: #1d4ed8;
+}
+.button-primary:pressed {
+    -fx-background-color: #1e40af;
 }
 
-/* 次要按鈕（復原） */
+/* ── 按鈕：次要（復原）──────────────────────────────────────── */
 .button-secondary {
     -fx-background-color: #6c757d;
     -fx-text-fill: white;
@@ -51,14 +54,14 @@
     -fx-background-color: #5a6268;
 }
 
-/* 日誌區域 */
+/* ── 日誌區域 ────────────────────────────────────────────────── */
 .log-area {
     -fx-control-inner-background: #212529;
     -fx-text-fill: #00ff66;
     -fx-font-family: "Consolas", monospace;
 }
 
-/* 表格 */
+/* ── 表格 ────────────────────────────────────────────────────── */
 .table-view {
     -fx-background-radius: 6px;
     -fx-border-color: #dee2e6;

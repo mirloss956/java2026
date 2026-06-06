@@ -13,7 +13,7 @@
     </padding>
     <children>
 
-        <!-- ── 工具列 ────────────────────────────────────────────────────── -->
+        <!-- ── 工具列 ─────────────────────────────────────────────────── -->
         <HBox alignment="CENTER_LEFT" spacing="15.0" styleClass="section-box">
             <children>
                 <Label style="-fx-font-weight: bold;" text="操作：" />
@@ -36,7 +36,7 @@
             </children>
         </HBox>
 
-        <!-- ── 拖曳區 ────────────────────────────────────────────────────── -->
+        <!-- ── 拖曳區 ─────────────────────────────────────────────────── -->
         <VBox fx:id="dropPane"
               alignment="CENTER"
               onDragDropped="#handleDragDropped"
@@ -50,7 +50,7 @@
             </children>
         </VBox>
 
-        <!-- ── 主內容：日誌 + 檔案清單 ──────────────────────────────────── -->
+        <!-- ── 主內容：日誌 + 檔案清單 ───────────────────────────────── -->
         <SplitPane dividerPositions="0.35" VBox.vgrow="ALWAYS">
             <items>
 
@@ -69,15 +69,16 @@
                 <VBox spacing="5.0">
                     <children>
                         <Label style="-fx-font-weight: bold;" text="檔案處理清單：" />
-                        <TableView fx:id="fileTable"
-                                   placeholder="&lt;尚未掃描任何資料夾&gt;"
-                                   VBox.vgrow="ALWAYS">
+                        <TableView fx:id="fileTable" VBox.vgrow="ALWAYS">
                             <columns>
                                 <TableColumn fx:id="colName"   prefWidth="180.0" text="檔案名稱" />
-                                <TableColumn fx:id="colPath"   prefWidth="260.0" text="原始路徑" />
-                                <TableColumn fx:id="colSize"   prefWidth="80.0"  text="大小" />
+                                <TableColumn fx:id="colPath"   prefWidth="240.0" text="原始路徑" />
+                                <TableColumn fx:id="colSize"   prefWidth="90.0"  text="大小" />
                                 <TableColumn fx:id="colStatus" prefWidth="100.0" text="狀態" />
                             </columns>
+                            <placeholder>
+                                <Label text="尚未掃描任何檔案" />
+                            </placeholder>
                         </TableView>
                     </children>
                 </VBox>

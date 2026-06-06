@@ -13,6 +13,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 負責人：B
+ *
+ * 修正：dryRun 模式下，只有 PENDING 狀態的檔案才標為 MOVED（預覽）；
+ * DUPLICATE / SKIPPED / FAILED 等非 PENDING 狀態應維持原狀，不被覆蓋。
+ */
 public class FileMoveServiceImpl implements FileMoveService {
 
     private final List<MoveHistory> lastMoveHistory = new ArrayList<>();
@@ -22,8 +28,8 @@ public class FileMoveServiceImpl implements FileMoveService {
         final Path movedDestination;
 
         MoveHistory(Path originalSource, Path movedDestination) {
-            this.originalSource = originalSource;
-            this.movedDestination = movedDestination;
+            this.originalSource    = originalSource;
+            this.movedDestination  = movedDestination;
         }
     }
 
@@ -38,7 +44,13 @@ public class FileMoveServiceImpl implements FileMoveService {
         }
 
         for (FileItem item : items) {
-            Path src = item.getSourcePath();
+            // 非 PENDING 的檔案（DUPLICATE、SKIPPED、FAILED…）一律跳過，
+            // 不論 dryRun 與否都不應改變其狀態。
+            if (item.getStatus() != FileStatus.PENDING) {
+                continue;
+            }
+
+            Path src  = item.getSourcePath();
             Path dest = item.getDestinationPath();
 
             if (dest == null) {
@@ -47,7 +59,7 @@ public class FileMoveServiceImpl implements FileMoveService {
             }
 
             if (dryRun) {
-                // 修正：狀態從 SUCCESS 改為 MOVED
+                // 預覽模式：只標記「會被搬移」，不實際動檔案
                 item.setStatus(FileStatus.MOVED);
             } else {
                 try {
@@ -55,13 +67,9 @@ public class FileMoveServiceImpl implements FileMoveService {
                     if (destFolder != null && !Files.exists(destFolder)) {
                         Files.createDirectories(destFolder);
                     }
-
                     Files.move(src, dest, StandardCopyOption.REPLACE_EXISTING);
                     lastMoveHistory.add(new MoveHistory(src, dest));
-                    
-                    // 修正：狀態從 SUCCESS 改為 MOVED
                     item.setStatus(FileStatus.MOVED);
-
                 } catch (IOException e) {
                     System.err.println("檔案搬移失敗: " + src + " -> " + e.getMessage());
                     item.setStatus(FileStatus.FAILED);
@@ -69,7 +77,6 @@ public class FileMoveServiceImpl implements FileMoveService {
             }
         }
 
-        // 修正：配合 C 的規格，將處理完的清單與當前時間丟進建構子，讓 OrganizeResult 自己去算成功/失敗數
         return new OrganizeResult(items, LocalDateTime.now());
     }
 
@@ -80,6 +87,7 @@ public class FileMoveServiceImpl implements FileMoveService {
         }
 
         boolean allSuccess = true;
+        // 反向順序復原，避免同資料夾下的檔案互相衝突
         for (int i = lastMoveHistory.size() - 1; i >= 0; i--) {
             MoveHistory history = lastMoveHistory.get(i);
             try {
@@ -87,7 +95,8 @@ public class FileMoveServiceImpl implements FileMoveService {
                 if (originalFolder != null && !Files.exists(originalFolder)) {
                     Files.createDirectories(originalFolder);
                 }
-                Files.move(history.movedDestination, history.originalSource, StandardCopyOption.REPLACE_EXISTING);
+                Files.move(history.movedDestination, history.originalSource,
+                        StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 System.err.println("復原檔案失敗: " + history.movedDestination + " -> " + e.getMessage());
                 allSuccess = false;

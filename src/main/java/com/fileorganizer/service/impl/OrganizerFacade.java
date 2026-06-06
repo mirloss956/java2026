@@ -25,14 +25,17 @@ import java.util.function.Consumer;
  */
 public class OrganizerFacade {
 
-    private final FileScanService      scanService;
-    private final FileMoveService      moveService;
+    private final FileScanService        scanService;
+    private final FileMoveService        moveService;
     private final DuplicateDetectService duplicateService;
-    private final LogService           logService;
-    private final WatchService         watchService;
-    private final AppConfig            config;
+    private final LogService             logService;
+    private final WatchService           watchService;
+    private final AppConfig              config;
 
-    /** volatile：updateRuleMode() 可能在任意執行緒呼叫，scanAsync 在虛擬執行緒讀取 */
+    /**
+     * volatile：AppContext.updateRuleMode() 可能在任意執行緒呼叫，
+     * scanAsync 在虛擬執行緒讀取，volatile 保證可見性。
+     */
     private volatile RuleEngine ruleEngine;
 
     private final ObservableList<FileItem> fileItems     = FXCollections.observableArrayList();
@@ -47,13 +50,13 @@ public class OrganizerFacade {
             WatchService watchService,
             RuleEngine ruleEngine,
             AppConfig config) {
-        this.scanService       = scanService;
-        this.moveService       = moveService;
-        this.duplicateService  = duplicateService;
-        this.logService        = logService;
-        this.watchService      = watchService;
-        this.ruleEngine        = ruleEngine;
-        this.config            = config;
+        this.scanService      = scanService;
+        this.moveService      = moveService;
+        this.duplicateService = duplicateService;
+        this.logService       = logService;
+        this.watchService     = watchService;
+        this.ruleEngine       = ruleEngine;
+        this.config           = config;
     }
 
     // =========================================================
@@ -66,7 +69,7 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 掃描
+    // 掃描（A 拖曳或選擇資料夾後呼叫）
     // =========================================================
 
     public void scanAsync(Path directory, Consumer<Integer> onDone) {
@@ -76,6 +79,7 @@ public class OrganizerFacade {
             try {
                 List<FileItem> result = scanService.scan(directory);
 
+                // config.isDetectDuplicates() 依設定決定是否執行重複偵測
                 if (config.isDetectDuplicates()) {
                     duplicateService.detectDuplicates(result);
                 }
@@ -94,9 +98,13 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 整理
+    // 整理（A 按下「開始整理」按鈕後呼叫）
     // =========================================================
 
+    /**
+     * @param dryRun true = 預覽模式（不實際搬移）
+     * @param onDone 完成後的回呼，傳入 OrganizeResult 供 A 顯示統計
+     */
     public void organizeAsync(boolean dryRun, Consumer<OrganizeResult> onDone) {
         if (fileItems.isEmpty()) {
             setStatus("請先掃描資料夾");
@@ -141,16 +149,17 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // WatchService 控制
+    // WatchService 控制（A 的監控開關）
     // =========================================================
 
     public void startWatch(Path directory) {
         watchService.setOnNewFileDetected(newFile -> {
+            // 回呼已在 UI 執行緒（FolderWatchServiceImpl 內有 Platform.runLater）
             setStatus("偵測到新檔案：" + newFile.getFileName());
             scanAsync(directory, null);
         });
         watchService.startWatch(directory);
-        setStatus("即時監控已啟動");
+        setStatus("即時監控已啟動：" + directory.getFileName());
     }
 
     public void stopWatch() {
@@ -175,7 +184,7 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 日誌查詢
+    // 日誌查詢（A 的日誌頁面用）
     // =========================================================
 
     public List<OrganizeResult> getRecentLogs(int limit) {
@@ -188,17 +197,17 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // JavaFX 可綁定的屬性
+    // JavaFX 可綁定的屬性（A 直接 bind）
     // =========================================================
 
     /** A 把 TableView 的 items 設成這個 */
-    public ObservableList<FileItem> getFileItems()   { return fileItems; }
+    public ObservableList<FileItem> getFileItems()  { return fileItems; }
 
     /** spinner.visibleProperty().bind(facade.busyProperty()) */
-    public BooleanProperty busyProperty()            { return busy; }
+    public BooleanProperty busyProperty()           { return busy; }
 
     /** label.textProperty().bind(facade.statusMessageProperty()) */
-    public StringProperty statusMessageProperty()    { return statusMessage; }
+    public StringProperty statusMessageProperty()   { return statusMessage; }
 
     // =========================================================
     // 私有工具
