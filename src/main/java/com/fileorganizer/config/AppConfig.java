@@ -17,6 +17,7 @@ public class AppConfig {
     private boolean detectDuplicates; // 是否偵測重複檔案
     private String activeRuleMode;    // "extension" | "date" | "custom"
     private List<String> customRules; // 使用者自訂規則（序列化後的 JSON）
+    private int scanDepth;            // 掃描子資料夾深度（1 = 只掃一層，不含子資料夾）
 
     public AppConfig() {
         this.watchEnabled = false;
@@ -24,6 +25,7 @@ public class AppConfig {
         this.detectDuplicates = true;
         this.activeRuleMode = "extension";
         this.customRules = new ArrayList<>();
+        this.scanDepth = 1;
     }
 
     // --- Getters / Setters ---
@@ -47,4 +49,9 @@ public class AppConfig {
 
     public List<String> getCustomRules() { return customRules; }
     public void setCustomRules(List<String> customRules) { this.customRules = customRules; }
+
+    public int getScanDepth() { return scanDepth; }
+    public void setScanDepth(int scanDepth) {
+        this.scanDepth = Math.max(1, scanDepth); // 最小值為 1，避免傳入非法值
+    }
 }

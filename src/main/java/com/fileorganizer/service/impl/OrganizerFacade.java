@@ -22,6 +22,9 @@ import java.util.function.Consumer;
  *  1. 把 A 的「掃描 + 整理」指令，按正確順序串接 B 的各個 service
  *  2. 在背景執行緒跑耗時操作，結果切回 JavaFX UI 執行緒
  *  3. 暴露 ObservableList / Property 讓 A 做資料綁定
+ *
+ * 修正：scanAsync 改用 scanRecursive(directory, depth)，
+ * depth 從 AppConfig.getScanDepth() 讀取，支援使用者控制掃描層數。
  */
 public class OrganizerFacade {
 
@@ -72,14 +75,21 @@ public class OrganizerFacade {
     // 掃描（A 拖曳或選擇資料夾後呼叫）
     // =========================================================
 
+    /**
+     * 使用 scanRecursive 掃描資料夾，深度由 AppConfig.getScanDepth() 決定。
+     * depth=1 時行為與舊版 scan()（只掃一層）完全一致。
+     *
+     * @param directory 要掃描的資料夾
+     * @param onDone    完成後的回呼，傳入掃描到的檔案數量
+     */
     public void scanAsync(Path directory, Consumer<Integer> onDone) {
-        setBusy(true, "掃描中：" + directory.getFileName());
+        int depth = config.getScanDepth();
+        setBusy(true, "掃描中（深度 " + depth + " 層）：" + directory.getFileName());
 
         Thread.ofVirtual().start(() -> {
             try {
-                List<FileItem> result = scanService.scan(directory);
+                List<FileItem> result = scanService.scanRecursive(directory, depth);
 
-                // config.isDetectDuplicates() 依設定決定是否執行重複偵測
                 if (config.isDetectDuplicates()) {
                     duplicateService.detectDuplicates(result);
                 }
@@ -88,7 +98,7 @@ public class OrganizerFacade {
 
                 Platform.runLater(() -> {
                     fileItems.setAll(result);
-                    setBusy(false, "掃描完成，共 " + result.size() + " 個檔案");
+                    setBusy(false, "掃描完成（深度 " + depth + " 層），共 " + result.size() + " 個檔案");
                     if (onDone != null) onDone.accept(result.size());
                 });
             } catch (Exception e) {
