@@ -1,6 +1,7 @@
 package com.fileorganizer.controller;
 
 import com.fileorganizer.config.AppConfig;
+import com.fileorganizer.controller.DuplicateActionDialog.DuplicateAction;
 import com.fileorganizer.model.FileItem;
 import com.fileorganizer.service.impl.AppContext;
 import com.fileorganizer.service.impl.OrganizerFacade;
@@ -16,6 +17,7 @@ import javafx.stage.DirectoryChooser;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.Optional;
 
 public class MainController {
 
@@ -25,6 +27,7 @@ public class MainController {
     @FXML private CheckBox                        toggleWatch;
     @FXML private VBox                            dropPane;
     @FXML private Spinner<Integer>                spinnerDepth;
+    @FXML private Label                           lblDropHint;
 
     @FXML private TableColumn<FileItem, String>  colName;
     @FXML private TableColumn<FileItem, String>  colPath;
@@ -32,6 +35,7 @@ public class MainController {
     @FXML private TableColumn<FileItem, String>  colStatus;
     @FXML private TableColumn<FileItem, String>  colDest;
 
+    /** 使用者選好的資料夾，拖進來時只記路徑，不立刻掃描 */
     private Path currentDirectory;
 
     @FXML
@@ -82,7 +86,7 @@ public class MainController {
             });
         }
 
-        // ── 狀態列：追加 Facade 狀態訊息 ─────────────────────────────────────
+        // ── 狀態列 ──────────────────────────────────────────────────────────────
         if (lblStatus != null) {
             facade.statusMessageProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null && !newVal.isBlank()) {
@@ -119,6 +123,8 @@ public class MainController {
         }
     }
 
+    // ── 拖曳事件 ──────────────────────────────────────────────────────────────
+
     @FXML
     void handleDragOver(DragEvent event) {
         if (event.getDragboard().hasFiles()) {
@@ -135,7 +141,7 @@ public class MainController {
         if (event.getDragboard().hasFiles()) {
             File file = event.getDragboard().getFiles().get(0);
             if (file.isDirectory()) {
-                triggerScan(file.toPath());
+                selectDirectory(file.toPath());
                 success = true;
             } else {
                 if (lblStatus != null)
@@ -147,6 +153,20 @@ public class MainController {
         event.consume();
     }
 
+    // ── 按鈕事件 ──────────────────────────────────────────────────────────────
+
+    /** 「掃描」按鈕：用目前選好的資料夾與深度執行掃描 */
+    @FXML
+    void handleScan(ActionEvent event) {
+        if (currentDirectory == null) {
+            if (lblStatus != null)
+                lblStatus.appendText("[錯誤] 請先選擇或拖曳一個資料夾。\n");
+            return;
+        }
+        triggerScan(currentDirectory);
+    }
+
+    /** 「開始整理」按鈕：先跳重複檔案選項，再執行整理 */
     @FXML
     void handleOrganize(ActionEvent event) {
         if (currentDirectory == null) {
@@ -154,8 +174,17 @@ public class MainController {
                 lblStatus.appendText("[錯誤] 請先選擇或拖曳一個資料夾再整理。\n");
             return;
         }
+
         boolean dryRun = chkDryRun != null && chkDryRun.isSelected();
-        AppContext.get().getFacade().organizeAsync(dryRun, result -> {});
+
+        Optional<DuplicateAction> actionOpt = DuplicateActionDialog.show();
+        if (actionOpt.isEmpty()) {
+            if (lblStatus != null)
+                lblStatus.appendText("[資訊] 已取消整理。\n");
+            return;
+        }
+
+        AppContext.get().getFacade().organizeAsync(dryRun, actionOpt.get(), result -> {});
     }
 
     @FXML
@@ -163,13 +192,37 @@ public class MainController {
         AppContext.get().getFacade().undoAsync(null);
     }
 
+    // ── 私有工具 ──────────────────────────────────────────────────────────────
+
     private void openDirectoryChooser() {
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("選擇要整理的資料夾");
         File selectedDir = chooser.showDialog(dropPane.getScene().getWindow());
-        if (selectedDir != null) triggerScan(selectedDir.toPath());
+        if (selectedDir != null) selectDirectory(selectedDir.toPath());
     }
 
+    /**
+     * 選好資料夾後只記路徑、更新拖曳區提示，不立刻掃描。
+     * 使用者調好深度後按「掃描」才真正開始。
+     */
+    private void selectDirectory(Path directory) {
+        currentDirectory = directory;
+
+        // 更新拖曳區文字，讓使用者知道已選好資料夾
+        if (lblDropHint != null) {
+            lblDropHint.setText("📂 已選擇：" + directory.toAbsolutePath()
+                + "　（調整好深度後按「掃描」）");
+            lblDropHint.setStyle("-fx-font-size: 14px; -fx-text-fill: #2563eb;");
+        }
+
+        if (lblStatus != null)
+            lblStatus.appendText("[系統] 已選擇資料夾：" + directory.toAbsolutePath()
+                + "，請調整掃描深度後按「掃描」。\n");
+    }
+
+    /**
+     * 實際執行掃描，同步深度設定到 AppConfig。
+     */
     private void triggerScan(Path directory) {
         OrganizerFacade facade = AppContext.get().getFacade();
         AppConfig config = AppContext.get().getConfig();
@@ -178,8 +231,6 @@ public class MainController {
 
         boolean wasWatching = facade.isWatching();
         if (wasWatching) facade.stopWatch();
-
-        currentDirectory = directory;
 
         facade.scanAsync(directory, count -> {
             if (wasWatching || (toggleWatch != null && toggleWatch.isSelected())) {

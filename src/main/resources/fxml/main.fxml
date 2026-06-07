@@ -13,46 +13,73 @@
     </padding>
     <children>
 
+        <!-- ── 工具列 ─────────────────────────────────────────────────── -->
         <HBox alignment="CENTER_LEFT" spacing="15.0" styleClass="section-box">
             <children>
                 <Label style="-fx-font-weight: bold;" text="操作：" />
+
                 <CheckBox fx:id="chkDryRun" text="預覽模式（不實際搬移）" />
                 <CheckBox fx:id="toggleWatch" text="即時監控資料夾" />
+
                 <Separator orientation="VERTICAL" />
+
                 <Label text="掃描深度：" />
                 <Spinner fx:id="spinnerDepth" min="1" max="10" initialValue="1"
                          prefWidth="70.0" editable="true" />
                 <Label text="層" />
+
+                <Separator orientation="VERTICAL" />
+
+                <Button mnemonicParsing="false"
+                        onAction="#handleScan"
+                        styleClass="button-secondary"
+                        text="🔍 掃描" />
+
                 <Region HBox.hgrow="ALWAYS" />
-                <Button mnemonicParsing="false" onAction="#handleOrganize"
-                        styleClass="button-primary" text="▶ 開始整理" />
-                <Button mnemonicParsing="false" onAction="#handleUndo"
-                        styleClass="button-secondary" text="↩ 復原上一次操作" />
+
+                <Button mnemonicParsing="false"
+                        onAction="#handleOrganize"
+                        styleClass="button-primary"
+                        text="▶ 開始整理" />
+
+                <Button mnemonicParsing="false"
+                        onAction="#handleUndo"
+                        styleClass="button-secondary"
+                        text="↩ 復原上一次操作" />
             </children>
         </HBox>
 
-        <VBox fx:id="dropPane" alignment="CENTER"
+        <!-- ── 拖曳區 ─────────────────────────────────────────────────── -->
+        <VBox fx:id="dropPane"
+              alignment="CENTER"
               onDragDropped="#handleDragDropped"
               onDragOver="#handleDragOver"
               prefHeight="120.0"
               styleClass="drop-shadow-pane"
               VBox.vgrow="NEVER">
             <children>
-                <Label style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;"
+                <Label fx:id="lblDropHint"
+                       style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;"
                        text="📂 將要整理的資料夾拖曳至此處，或點擊選擇資料夾" />
             </children>
         </VBox>
 
+        <!-- ── 主內容：日誌 + 檔案清單 ───────────────────────────────── -->
         <SplitPane dividerPositions="0.35" VBox.vgrow="ALWAYS">
             <items>
+
+                <!-- 左：日誌 -->
                 <VBox spacing="5.0">
                     <children>
                         <Label style="-fx-font-weight: bold;" text="執行進度與日誌：" />
-                        <TextArea fx:id="lblStatus" editable="false"
-                                  styleClass="log-area" VBox.vgrow="ALWAYS" />
+                        <TextArea fx:id="lblStatus"
+                                  editable="false"
+                                  styleClass="log-area"
+                                  VBox.vgrow="ALWAYS" />
                     </children>
                 </VBox>
 
+                <!-- 右：檔案清單 -->
                 <VBox spacing="5.0">
                     <children>
                         <Label style="-fx-font-weight: bold;" text="檔案處理清單：" />
@@ -70,6 +97,7 @@
                         </TableView>
                     </children>
                 </VBox>
+
             </items>
         </SplitPane>
 

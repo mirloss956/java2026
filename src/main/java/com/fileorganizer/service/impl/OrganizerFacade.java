@@ -1,6 +1,7 @@
 package com.fileorganizer.service.impl;
 
 import com.fileorganizer.config.AppConfig;
+import com.fileorganizer.controller.DuplicateActionDialog.DuplicateAction;
 import com.fileorganizer.model.*;
 import com.fileorganizer.rule.RuleEngine;
 import com.fileorganizer.service.*;
@@ -8,6 +9,8 @@ import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.collections.*;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
@@ -18,8 +21,9 @@ import java.util.function.Consumer;
  * 整合橋接層。A（UI Controller）只需要跟這個類別說話，
  * 不需要知道 B 的任何實作細節。
  *
- * 修正：targetRoot 改為掃描的資料夾本身（原地整理），
- * 不再使用 AppConfig.targetDirectory 或 ~/整理結果。
+ * 修正：
+ *  - targetRoot 改為掃描的資料夾本身（原地整理）
+ *  - organizeAsync 新增 DuplicateAction 參數，支援三種重複檔案處理方式
  */
 public class OrganizerFacade {
 
@@ -35,6 +39,9 @@ public class OrganizerFacade {
     private final ObservableList<FileItem> fileItems     = FXCollections.observableArrayList();
     private final BooleanProperty          busy          = new SimpleBooleanProperty(false);
     private final StringProperty           statusMessage = new SimpleStringProperty("就緒");
+
+    /** 記住最近一次掃描的資料夾，供重複檔案 ISOLATE 模式使用 */
+    private volatile Path lastScannedDirectory;
 
     public OrganizerFacade(
             FileScanService scanService,
@@ -65,13 +72,9 @@ public class OrganizerFacade {
     // 掃描
     // =========================================================
 
-    /**
-     * 掃描資料夾，並以該資料夾本身作為整理目標根目錄（原地整理）。
-     * 例如掃 Downloads/test，整理後會在 Downloads/test 內建立
-     * 圖片/、文件/、壓縮檔/ 等子資料夾。
-     */
     public void scanAsync(Path directory, Consumer<Integer> onDone) {
         int depth = config.getScanDepth();
+        lastScannedDirectory = directory;
         setBusy(true, "[系統] 掃描中（深度 " + depth + " 層）：" + directory.getFileName());
 
         Thread.ofVirtual().start(() -> {
@@ -101,7 +104,13 @@ public class OrganizerFacade {
     // 整理
     // =========================================================
 
-    public void organizeAsync(boolean dryRun, Consumer<OrganizeResult> onDone) {
+    /**
+     * @param dryRun          true = 預覽模式
+     * @param duplicateAction 重複檔案處理方式
+     * @param onDone          完成後回呼
+     */
+    public void organizeAsync(boolean dryRun, DuplicateAction duplicateAction,
+                              Consumer<OrganizeResult> onDone) {
         if (fileItems.isEmpty()) {
             setStatus("[錯誤] 請先掃描資料夾");
             return;
@@ -109,9 +118,13 @@ public class OrganizerFacade {
         setBusy(true, dryRun ? "[系統] 預覽中，計算整理結果..." : "[系統] 整理中，搬移檔案...");
 
         List<FileItem> snapshot = List.copyOf(fileItems);
+        Path targetDir = lastScannedDirectory;
 
         Thread.ofVirtual().start(() -> {
             try {
+                // 依重複處理模式調整檔案狀態
+                applyDuplicateAction(snapshot, duplicateAction, targetDir, dryRun);
+
                 OrganizeResult result = moveService.move(snapshot, dryRun);
 
                 if (!dryRun) {
@@ -127,6 +140,46 @@ public class OrganizerFacade {
                 Platform.runLater(() -> setBusy(false, "[錯誤] 整理失敗：" + e.getMessage()));
             }
         });
+    }
+
+    /**
+     * 依使用者選擇的模式，調整重複檔案的 destinationPath 或 status。
+     */
+    private void applyDuplicateAction(List<FileItem> items, DuplicateAction action,
+                                      Path targetDir, boolean dryRun) {
+        for (FileItem item : items) {
+            if (item.getStatus() != FileStatus.DUPLICATE) continue;
+
+            switch (action) {
+                case MOVE_ALL -> {
+                    // 重複檔案也照正常規則移動：把狀態改回 PENDING，
+                    // destinationPath 已由 RuleEngine 設好，直接沿用
+                    item.setStatus(FileStatus.PENDING);
+                }
+                case KEEP_ONE -> {
+                    // 刪除多餘的重複檔（dryRun 時只標記，不實際刪）
+                    if (!dryRun) {
+                        try {
+                            Files.deleteIfExists(item.getSourcePath());
+                        } catch (IOException e) {
+                            System.err.println("[錯誤] 刪除重複檔失敗：" + item.getFileName()
+                                    + " -> " + e.getMessage());
+                        }
+                    }
+                    item.setStatus(FileStatus.SKIPPED);
+                }
+                case ISOLATE -> {
+                    // 移到「重複檔案」子資料夾
+                    if (targetDir != null) {
+                        Path isolateDest = targetDir
+                                .resolve("重複檔案")
+                                .resolve(item.getFileName());
+                        item.setDestinationPath(isolateDest);
+                        item.setStatus(FileStatus.PENDING);
+                    }
+                }
+            }
+        }
     }
 
     // =========================================================
