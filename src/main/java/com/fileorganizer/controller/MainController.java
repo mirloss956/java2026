@@ -12,6 +12,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.TransferMode;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 
@@ -28,6 +29,8 @@ public class MainController {
     @FXML private VBox                            dropPane;
     @FXML private Spinner<Integer>                spinnerDepth;
     @FXML private Label                           lblDropHint;
+    @FXML private HBox                            scanningIndicator;
+    @FXML private Label                           lblScanningHint;
 
     @FXML private TableColumn<FileItem, String>  colName;
     @FXML private TableColumn<FileItem, String>  colPath;
@@ -35,7 +38,6 @@ public class MainController {
     @FXML private TableColumn<FileItem, String>  colStatus;
     @FXML private TableColumn<FileItem, String>  colDest;
 
-    /** 使用者選好的資料夾，拖進來時只記路徑，不立刻掃描 */
     private Path currentDirectory;
 
     @FXML
@@ -50,20 +52,16 @@ public class MainController {
             if (colName != null)
                 colName.setCellValueFactory(
                     cd -> new SimpleStringProperty(cd.getValue().getFileName()));
-
             if (colPath != null)
                 colPath.setCellValueFactory(
                     cd -> new SimpleStringProperty(cd.getValue().getSourcePath().toString()));
-
             if (colSize != null)
                 colSize.setCellValueFactory(
                     cd -> new SimpleStringProperty(
                         FileSizeUtil.humanReadable(cd.getValue().getSizeBytes())));
-
             if (colStatus != null)
                 colStatus.setCellValueFactory(
                     cd -> new SimpleStringProperty(cd.getValue().getStatus().name()));
-
             if (colDest != null)
                 colDest.setCellValueFactory(cd -> {
                     Path dest = cd.getValue().getDestinationPath();
@@ -86,7 +84,7 @@ public class MainController {
             });
         }
 
-        // ── 狀態列 ──────────────────────────────────────────────────────────────
+        // ── 狀態列 + busy 連動 loading 提示 ────────────────────────────────────
         if (lblStatus != null) {
             facade.statusMessageProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null && !newVal.isBlank()) {
@@ -94,6 +92,26 @@ public class MainController {
                 }
             });
         }
+
+        // busy 時顯示 loading 指示器，並更新提示文字
+        facade.busyProperty().addListener((obs, wasBusy, isNowBusy) -> {
+            if (scanningIndicator != null) {
+                scanningIndicator.setVisible(isNowBusy);
+                scanningIndicator.setManaged(isNowBusy);
+            }
+            if (lblDropHint != null && lblScanningHint != null) {
+                if (isNowBusy) {
+                    lblDropHint.setVisible(false);
+                    lblDropHint.setManaged(false);
+                    // 把目前的狀態訊息顯示在 loading 文字上
+                    String msg = facade.statusMessageProperty().get();
+                    lblScanningHint.setText(msg != null ? msg : "處理中，請稍候...");
+                } else {
+                    lblDropHint.setVisible(true);
+                    lblDropHint.setManaged(true);
+                }
+            }
+        });
 
         // ── 即時監控 CheckBox ───────────────────────────────────────────────────
         if (toggleWatch != null) {
@@ -155,7 +173,6 @@ public class MainController {
 
     // ── 按鈕事件 ──────────────────────────────────────────────────────────────
 
-    /** 「掃描」按鈕：用目前選好的資料夾與深度執行掃描 */
     @FXML
     void handleScan(ActionEvent event) {
         if (currentDirectory == null) {
@@ -166,7 +183,6 @@ public class MainController {
         triggerScan(currentDirectory);
     }
 
-    /** 「開始整理」按鈕：先跳重複檔案選項，再執行整理 */
     @FXML
     void handleOrganize(ActionEvent event) {
         if (currentDirectory == null) {
@@ -201,14 +217,9 @@ public class MainController {
         if (selectedDir != null) selectDirectory(selectedDir.toPath());
     }
 
-    /**
-     * 選好資料夾後只記路徑、更新拖曳區提示，不立刻掃描。
-     * 使用者調好深度後按「掃描」才真正開始。
-     */
     private void selectDirectory(Path directory) {
         currentDirectory = directory;
 
-        // 更新拖曳區文字，讓使用者知道已選好資料夾
         if (lblDropHint != null) {
             lblDropHint.setText("📂 已選擇：" + directory.toAbsolutePath()
                 + "　（調整好深度後按「掃描」）");
@@ -220,9 +231,6 @@ public class MainController {
                 + "，請調整掃描深度後按「掃描」。\n");
     }
 
-    /**
-     * 實際執行掃描，同步深度設定到 AppConfig。
-     */
     private void triggerScan(Path directory) {
         OrganizerFacade facade = AppContext.get().getFacade();
         AppConfig config = AppContext.get().getConfig();

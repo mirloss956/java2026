@@ -61,6 +61,16 @@
                 <Label fx:id="lblDropHint"
                        style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;"
                        text="📂 將要整理的資料夾拖曳至此處，或點擊選擇資料夾" />
+                <!-- 掃描中 loading 提示，預設隱藏 -->
+                <HBox fx:id="scanningIndicator" alignment="CENTER" spacing="8.0"
+                      managed="false" visible="false">
+                    <children>
+                        <ProgressIndicator prefWidth="24.0" prefHeight="24.0" />
+                        <Label fx:id="lblScanningHint"
+                               style="-fx-font-size: 13px; -fx-text-fill: #2563eb;"
+                               text="掃描中，請稍候..." />
+                    </children>
+                </HBox>
             </children>
         </VBox>
 
