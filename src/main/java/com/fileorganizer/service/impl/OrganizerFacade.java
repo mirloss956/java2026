@@ -17,14 +17,6 @@ import java.util.function.Consumer;
  *
  * 整合橋接層。A（UI Controller）只需要跟這個類別說話，
  * 不需要知道 B 的任何實作細節。
- *
- * 職責：
- *  1. 把 A 的「掃描 + 整理」指令，按正確順序串接 B 的各個 service
- *  2. 在背景執行緒跑耗時操作，結果切回 JavaFX UI 執行緒
- *  3. 暴露 ObservableList / Property 讓 A 做資料綁定
- *
- * 修正：scanAsync 改用 scanRecursive(directory, depth)，
- * depth 從 AppConfig.getScanDepth() 讀取，支援使用者控制掃描層數。
  */
 public class OrganizerFacade {
 
@@ -35,10 +27,6 @@ public class OrganizerFacade {
     private final WatchService           watchService;
     private final AppConfig              config;
 
-    /**
-     * volatile：AppContext.updateRuleMode() 可能在任意執行緒呼叫，
-     * scanAsync 在虛擬執行緒讀取，volatile 保證可見性。
-     */
     private volatile RuleEngine ruleEngine;
 
     private final ObservableList<FileItem> fileItems     = FXCollections.observableArrayList();
@@ -66,25 +54,17 @@ public class OrganizerFacade {
     // 執行期熱替換規則引擎
     // =========================================================
 
-    /** 由 AppContext.updateRuleMode() 呼叫，下次 scanAsync 時自動使用新規則。 */
     public void setRuleEngine(RuleEngine ruleEngine) {
         this.ruleEngine = ruleEngine;
     }
 
     // =========================================================
-    // 掃描（A 拖曳或選擇資料夾後呼叫）
+    // 掃描
     // =========================================================
 
-    /**
-     * 使用 scanRecursive 掃描資料夾，深度由 AppConfig.getScanDepth() 決定。
-     * depth=1 時行為與舊版 scan()（只掃一層）完全一致。
-     *
-     * @param directory 要掃描的資料夾
-     * @param onDone    完成後的回呼，傳入掃描到的檔案數量
-     */
     public void scanAsync(Path directory, Consumer<Integer> onDone) {
         int depth = config.getScanDepth();
-        setBusy(true, "掃描中（深度 " + depth + " 層）：" + directory.getFileName());
+        setBusy(true, "[系統] 掃描中（深度 " + depth + " 層）：" + directory.getFileName());
 
         Thread.ofVirtual().start(() -> {
             try {
@@ -98,29 +78,25 @@ public class OrganizerFacade {
 
                 Platform.runLater(() -> {
                     fileItems.setAll(result);
-                    setBusy(false, "掃描完成（深度 " + depth + " 層），共 " + result.size() + " 個檔案");
+                    setBusy(false, "[系統] 掃描完成（深度 " + depth + " 層），共 " + result.size() + " 個檔案");
                     if (onDone != null) onDone.accept(result.size());
                 });
             } catch (Exception e) {
-                Platform.runLater(() -> setBusy(false, "掃描失敗：" + e.getMessage()));
+                Platform.runLater(() -> setBusy(false, "[錯誤] 掃描失敗：" + e.getMessage()));
             }
         });
     }
 
     // =========================================================
-    // 整理（A 按下「開始整理」按鈕後呼叫）
+    // 整理
     // =========================================================
 
-    /**
-     * @param dryRun true = 預覽模式（不實際搬移）
-     * @param onDone 完成後的回呼，傳入 OrganizeResult 供 A 顯示統計
-     */
     public void organizeAsync(boolean dryRun, Consumer<OrganizeResult> onDone) {
         if (fileItems.isEmpty()) {
-            setStatus("請先掃描資料夾");
+            setStatus("[錯誤] 請先掃描資料夾");
             return;
         }
-        setBusy(true, dryRun ? "預覽中..." : "整理中...");
+        setBusy(true, dryRun ? "[系統] 預覽中，計算整理結果..." : "[系統] 整理中，搬移檔案...");
 
         List<FileItem> snapshot = List.copyOf(fileItems);
 
@@ -138,7 +114,7 @@ public class OrganizerFacade {
                     if (onDone != null) onDone.accept(result);
                 });
             } catch (Exception e) {
-                Platform.runLater(() -> setBusy(false, "整理失敗：" + e.getMessage()));
+                Platform.runLater(() -> setBusy(false, "[錯誤] 整理失敗：" + e.getMessage()));
             }
         });
     }
@@ -148,39 +124,36 @@ public class OrganizerFacade {
     // =========================================================
 
     public void undoAsync(Runnable onDone) {
-        setBusy(true, "復原中...");
+        setBusy(true, "[系統] 復原上一次操作中...");
         Thread.ofVirtual().start(() -> {
             boolean ok = moveService.undoLast();
             Platform.runLater(() -> {
-                setBusy(false, ok ? "已復原上次操作" : "無法復原（無紀錄）");
+                setBusy(false, ok
+                    ? "[系統] 復原完成，所有檔案已移回原位"
+                    : "[資訊] 沒有可復原的操作（尚未執行整理，或已復原過）");
                 if (onDone != null) onDone.run();
             });
         });
     }
 
     // =========================================================
-    // WatchService 控制（A 的監控開關）
+    // WatchService
     // =========================================================
 
     public void startWatch(Path directory) {
         watchService.setOnNewFileDetected(newFile -> {
-            // 回呼已在 UI 執行緒（FolderWatchServiceImpl 內有 Platform.runLater）
-            setStatus("偵測到新檔案：" + newFile.getFileName());
+            setStatus("[監控] 偵測到新檔案：" + newFile.getFileName() + "，重新掃描中...");
             scanAsync(directory, null);
         });
         watchService.startWatch(directory);
-        setStatus("即時監控已啟動：" + directory.getFileName());
+        setStatus("[系統] 即時監控已啟動：" + directory.getFileName());
     }
 
     public void stopWatch() {
         watchService.stopWatch();
-        setStatus("即時監控已停止");
+        setStatus("[系統] 即時監控已停止");
     }
 
-    /**
-     * 供 App.stop() 呼叫。
-     * 透傳給 FolderWatchServiceImpl.shutdown()，等待執行緒確實結束後 JVM 才退出。
-     */
     public void shutdown() {
         if (watchService instanceof FolderWatchServiceImpl fws) {
             fws.shutdown();
@@ -194,7 +167,7 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 日誌查詢（A 的日誌頁面用）
+    // 日誌查詢
     // =========================================================
 
     public List<OrganizeResult> getRecentLogs(int limit) {
@@ -203,20 +176,15 @@ public class OrganizerFacade {
 
     public void clearLogs() {
         logService.clearAll();
-        setStatus("日誌已清除");
+        setStatus("[系統] 日誌已清除");
     }
 
     // =========================================================
-    // JavaFX 可綁定的屬性（A 直接 bind）
+    // JavaFX 可綁定屬性
     // =========================================================
 
-    /** A 把 TableView 的 items 設成這個 */
     public ObservableList<FileItem> getFileItems()  { return fileItems; }
-
-    /** spinner.visibleProperty().bind(facade.busyProperty()) */
     public BooleanProperty busyProperty()           { return busy; }
-
-    /** label.textProperty().bind(facade.statusMessageProperty()) */
     public StringProperty statusMessageProperty()   { return statusMessage; }
 
     // =========================================================
@@ -233,9 +201,10 @@ public class OrganizerFacade {
     }
 
     private String buildSummary(OrganizeResult r, boolean dryRun) {
-        String prefix = dryRun ? "[預覽] " : "";
-        return String.format("%s已處理 %d 個檔案 — 搬移 %d、略過 %d、重複 %d、失敗 %d",
-                prefix, r.getTotalCount(), r.getMovedCount(),
-                r.getSkippedCount(), r.getDuplicateCount(), r.getFailedCount());
+        String prefix = dryRun ? "[預覽] " : "[完成] ";
+        return String.format(
+            "%s已處理 %d 個檔案 — 搬移 %d、略過 %d、重複 %d、失敗 %d",
+            prefix, r.getTotalCount(), r.getMovedCount(),
+            r.getSkippedCount(), r.getDuplicateCount(), r.getFailedCount());
     }
 }

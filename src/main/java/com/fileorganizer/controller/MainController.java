@@ -60,7 +60,6 @@ public class MainController {
                 colStatus.setCellValueFactory(
                     cd -> new SimpleStringProperty(cd.getValue().getStatus().name()));
 
-            // 顯示「目標資料夾/檔名」，例如：圖片/photo.jpg 或 2025/06/report.pdf
             if (colDest != null)
                 colDest.setCellValueFactory(cd -> {
                     Path dest = cd.getValue().getDestinationPath();
@@ -83,7 +82,7 @@ public class MainController {
             });
         }
 
-        // ── 狀態列 ──────────────────────────────────────────────────────────────
+        // ── 狀態列：追加 Facade 狀態訊息 ─────────────────────────────────────
         if (lblStatus != null) {
             facade.statusMessageProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null && !newVal.isBlank()) {
