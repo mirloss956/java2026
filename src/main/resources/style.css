@@ -59,6 +59,7 @@
     -fx-control-inner-background: #212529;
     -fx-text-fill: #00ff66;
     -fx-font-family: "Consolas", monospace;
+    -fx-wrap-text: true;
 }
 
 /* ── 表格 ────────────────────────────────────────────────────── */
