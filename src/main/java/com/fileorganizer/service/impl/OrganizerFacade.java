@@ -17,6 +17,9 @@ import java.util.function.Consumer;
  *
  * 整合橋接層。A（UI Controller）只需要跟這個類別說話，
  * 不需要知道 B 的任何實作細節。
+ *
+ * 修正：targetRoot 改為掃描的資料夾本身（原地整理），
+ * 不再使用 AppConfig.targetDirectory 或 ~/整理結果。
  */
 public class OrganizerFacade {
 
@@ -62,6 +65,11 @@ public class OrganizerFacade {
     // 掃描
     // =========================================================
 
+    /**
+     * 掃描資料夾，並以該資料夾本身作為整理目標根目錄（原地整理）。
+     * 例如掃 Downloads/test，整理後會在 Downloads/test 內建立
+     * 圖片/、文件/、壓縮檔/ 等子資料夾。
+     */
     public void scanAsync(Path directory, Consumer<Integer> onDone) {
         int depth = config.getScanDepth();
         setBusy(true, "[系統] 掃描中（深度 " + depth + " 層）：" + directory.getFileName());
@@ -74,7 +82,9 @@ public class OrganizerFacade {
                     duplicateService.detectDuplicates(result);
                 }
 
-                ruleEngine.applyAll(result);
+                // 以掃描的資料夾本身為 targetRoot，實現原地整理
+                RuleEngine localEngine = new RuleEngine(ruleEngine.getRules(), directory);
+                localEngine.applyAll(result);
 
                 Platform.runLater(() -> {
                     fileItems.setAll(result);
