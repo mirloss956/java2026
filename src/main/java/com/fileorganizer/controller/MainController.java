@@ -30,25 +30,30 @@ import java.util.Optional;
 /**
  * 負責人：A（UI 互動）
  *
- * 修改：補上 btnScan @FXML 欄位與 handleScan() 方法，修復掃描按鈕消失問題。
+ * 操作流程：
+ *   1. 拖曳資料夾（或點擊選擇）→ 只記錄路徑，提示使用者調整掃描深度
+ *   2. 調整 Spinner 掃描深度
+ *   3. 按「掃描」鍵 → 才開始實際掃描
  */
 public class MainController {
 
-    @FXML private TableView<FileItem>           fileTable;
-    @FXML private TextArea                       lblStatus;
-    @FXML private CheckBox                       chkDryRun;
-    @FXML private CheckBox                       toggleWatch;
-    @FXML private VBox                           dropPane;
-    @FXML private Spinner<Integer>               spinnerDepth;
-    @FXML private Button                         btnBatchRename;
-    @FXML private Button                         btnScan;        // ← 補上：對應 FXML fx:id="btnScan"
+    @FXML private TableView<FileItem>            fileTable;
+    @FXML private TextArea                        lblStatus;
+    @FXML private CheckBox                        chkDryRun;
+    @FXML private CheckBox                        toggleWatch;
+    @FXML private VBox                            dropPane;
+    @FXML private Label                           lblDropHint;
+    @FXML private Spinner<Integer>                spinnerDepth;
+    @FXML private Button                          btnScan;
+    @FXML private Button                          btnBatchRename;
 
-    @FXML private TableColumn<FileItem, String> colName;
-    @FXML private TableColumn<FileItem, String> colPath;
-    @FXML private TableColumn<FileItem, String> colSize;
-    @FXML private TableColumn<FileItem, String> colStatus;
-    @FXML private TableColumn<FileItem, String> colDest;
+    @FXML private TableColumn<FileItem, String>  colName;
+    @FXML private TableColumn<FileItem, String>  colPath;
+    @FXML private TableColumn<FileItem, String>  colSize;
+    @FXML private TableColumn<FileItem, String>  colStatus;
+    @FXML private TableColumn<FileItem, String>  colDest;
 
+    /** 已選定的資料夾，僅在按下掃描鍵後才真正掃描 */
     private Path currentDirectory;
 
     @FXML
@@ -74,19 +79,14 @@ public class MainController {
                 colStatus.setCellValueFactory(
                     cd -> new SimpleStringProperty(cd.getValue().getStatus().name()));
 
-            // 沒有掃描任何檔案時，「批次重新命名」按鈕灰掉
-            if (btnBatchRename != null) {
+            if (btnBatchRename != null)
                 btnBatchRename.disableProperty().bind(
-                    Bindings.isEmpty(facade.getFileItems())
-                );
-            }
+                    Bindings.isEmpty(facade.getFileItems()));
         }
 
-        // ── 掃描按鈕：沒有選資料夾時灰掉 ────────────────────────────────
+        // ── 掃描按鈕：初始灰掉，選到資料夾後才啟用 ──────────────────────
         if (btnScan != null) {
-            // currentDirectory 是 private 欄位，用 facade.getFileItems() 做間接判斷無意義；
-            // 改為在 triggerScan 後解除 disable，初始狀態允許點擊（點後會提示選資料夾）
-            // 保持 enable，因為 handleScan 內部會做 null 檢查
+            btnScan.setDisable(true);
         }
 
         // ── 掃描深度 Spinner ──────────────────────────────────────────────
@@ -125,28 +125,96 @@ public class MainController {
             });
         }
 
-        // ── 拖曳區點擊 ───────────────────────────────────────────────────
+        // ── 拖曳區點擊：開啟資料夾選擇器（不立即掃描）──────────────────
         if (dropPane != null)
-            dropPane.setOnMouseClicked(event -> openDirectoryChooser());
+            dropPane.setOnMouseClicked(e -> openDirectoryChooser());
 
         if (lblStatus != null)
             lblStatus.appendText("[系統] 就緒。請拖曳資料夾或點擊選擇資料夾。\n");
     }
 
-    // ── 事件：掃描（補上，對應 FXML onAction="#handleScan"）──────────────
+    // =========================================================
+    // 事件：拖曳
+    // =========================================================
+
+    @FXML
+    void handleDragOver(DragEvent event) {
+        if (event.getDragboard().hasFiles()) {
+            event.acceptTransferModes(TransferMode.ANY);
+            if (dropPane != null)
+                dropPane.setStyle("-fx-background-color: #e8f4fd; -fx-border-color: #3498db;");
+        }
+        event.consume();
+    }
+
+    @FXML
+    void handleDragDropped(DragEvent event) {
+        boolean success = false;
+        if (event.getDragboard().hasFiles()) {
+            File file = event.getDragboard().getFiles().get(0);
+            if (file.isDirectory()) {
+                // ★ 只記錄路徑、更新提示，不掃描
+                setSelectedDirectory(file.toPath());
+                success = true;
+            } else {
+                if (lblStatus != null)
+                    lblStatus.appendText("[錯誤] 請拖曳「資料夾」而非單一檔案。\n");
+            }
+        }
+        event.setDropCompleted(success);
+        if (dropPane != null) dropPane.setStyle("");
+        event.consume();
+    }
+
+    // =========================================================
+    // 事件：掃描（使用者按下按鈕才執行）
+    // =========================================================
 
     @FXML
     void handleScan(ActionEvent event) {
         if (currentDirectory == null) {
-            // 尚未選資料夾，改為開啟資料夾選擇器
-            openDirectoryChooser();
+            if (lblStatus != null)
+                lblStatus.appendText("[提示] 請先拖曳或選擇一個資料夾。\n");
             return;
         }
-        // 已有資料夾時，直接重新掃描（允許重複掃描以更新清單）
-        triggerScan(currentDirectory);
+        executeScan(currentDirectory);
     }
 
-    // ── 事件：批次重新命名 ────────────────────────────────────────────────
+    // =========================================================
+    // 事件：開始整理
+    // =========================================================
+
+    @FXML
+    void handleOrganize(ActionEvent event) {
+        if (currentDirectory == null) {
+            if (lblStatus != null)
+                lblStatus.appendText("[錯誤] 請先選擇或拖曳一個資料夾再整理。\n");
+            return;
+        }
+        boolean dryRun = chkDryRun != null && chkDryRun.isSelected();
+
+        Optional<DuplicateAction> actionOpt = DuplicateActionDialog.show();
+        if (actionOpt.isEmpty()) {
+            if (lblStatus != null)
+                lblStatus.appendText("[資訊] 已取消整理。\n");
+            return;
+        }
+
+        AppContext.get().getFacade().organizeAsync(dryRun, actionOpt.get(), result -> {});
+    }
+
+    // =========================================================
+    // 事件：復原
+    // =========================================================
+
+    @FXML
+    void handleUndo(ActionEvent event) {
+        AppContext.get().getFacade().undoAsync(null);
+    }
+
+    // =========================================================
+    // 事件：批次重新命名
+    // =========================================================
 
     @FXML
     void handleBatchRename(ActionEvent event) {
@@ -155,34 +223,42 @@ public class MainController {
 
         if (items.isEmpty()) {
             if (lblStatus != null)
-                lblStatus.appendText("[資訊] 請先掃描資料夾再執行批次重新命名。\n");
+                lblStatus.appendText("[錯誤] 請先掃描資料夾，才能使用批次重新命名。\n");
             return;
         }
 
         try {
-            URL fxml = getClass().getResource("/fxml/batch_rename.fxml");
-            FXMLLoader loader = new FXMLLoader(fxml);
-            Scene scene = new Scene(loader.load());
-            scene.getStylesheets().add(
-                getClass().getResource("/style.css").toExternalForm());
+            URL fxmlUrl = getClass().getResource("/fxml/batch_rename.fxml");
+            if (fxmlUrl == null)
+                throw new IOException("找不到 batch_rename.fxml");
+
+            FXMLLoader loader = new FXMLLoader(fxmlUrl);
+            VBox root = loader.load();
 
             BatchRenameController ctrl = loader.getController();
-            ctrl.setItems(items);
+            ctrl.setItems(List.copyOf(items));
 
-            Stage stage = new Stage();
-            stage.setTitle("批次重新命名");
-            stage.initModality(Modality.WINDOW_MODAL);
-            stage.initOwner(dropPane.getScene().getWindow());
-            stage.setScene(scene);
-            stage.showAndWait();
+            Stage dialog = new Stage();
+            dialog.setTitle("批次重新命名");
+            dialog.initModality(Modality.WINDOW_MODAL);
+            dialog.initOwner(dropPane.getScene().getWindow());
+            dialog.setScene(new Scene(root));
+            dialog.setResizable(true);
+            dialog.showAndWait();
+
+            fileTable.refresh();
+            if (lblStatus != null)
+                lblStatus.appendText("[批次重新命名] 對話框已關閉。\n");
 
         } catch (IOException e) {
             if (lblStatus != null)
-                lblStatus.appendText("[錯誤] 無法開啟批次重新命名視窗：" + e.getMessage() + "\n");
+                lblStatus.appendText("[錯誤] 無法開啟批次重新命名：" + e.getMessage() + "\n");
         }
     }
 
-    // ── 事件：開啟磁碟分析 ────────────────────────────────────────────────
+    // =========================================================
+    // 事件：磁碟分析
+    // =========================================================
 
     @FXML
     void onOpenDiskDashboard(ActionEvent event) {
@@ -204,71 +280,47 @@ public class MainController {
         }
     }
 
-    // ── 事件：拖曳 ───────────────────────────────────────────────────────
+    // =========================================================
+    // 私有工具
+    // =========================================================
 
-    @FXML
-    void handleDragOver(DragEvent event) {
-        if (event.getDragboard().hasFiles())
-            event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
-        event.consume();
-    }
-
-    @FXML
-    void handleDragDropped(DragEvent event) {
-        boolean success = false;
-        if (event.getDragboard().hasFiles()) {
-            File file = event.getDragboard().getFiles().get(0);
-            if (file.isDirectory()) {
-                triggerScan(file.toPath());
-                success = true;
-            } else {
-                if (lblStatus != null)
-                    lblStatus.appendText("[錯誤] 請拖曳「資料夾」而非單一檔案。\n");
-            }
-        }
-        event.setDropCompleted(success);
-        if (dropPane != null) dropPane.setStyle("");
-        event.consume();
-    }
-
-    // ── 事件：開始整理 ───────────────────────────────────────────────────
-
-    @FXML
-    void handleOrganize(ActionEvent event) {
-        if (currentDirectory == null) {
-            if (lblStatus != null)
-                lblStatus.appendText("[錯誤] 請先選擇或拖曳一個資料夾再整理。\n");
-            return;
-        }
-        boolean dryRun = chkDryRun != null && chkDryRun.isSelected();
-
-        Optional<DuplicateAction> actionOpt = DuplicateActionDialog.show();
-        if (actionOpt.isEmpty()) {
-            if (lblStatus != null)
-                lblStatus.appendText("[資訊] 已取消整理。\n");
-            return;
-        }
-
-        AppContext.get().getFacade().organizeAsync(dryRun, actionOpt.get(), result -> {});
-    }
-
-    // ── 事件：復原 ───────────────────────────────────────────────────────
-
-    @FXML
-    void handleUndo(ActionEvent event) {
-        AppContext.get().getFacade().undoAsync(null);
-    }
-
-    // ── 私有工具 ─────────────────────────────────────────────────────────
-
+    /**
+     * 開啟資料夾選擇器，選好後只記錄路徑，不掃描。
+     */
     private void openDirectoryChooser() {
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("選擇要整理的資料夾");
         File selectedDir = chooser.showDialog(dropPane.getScene().getWindow());
-        if (selectedDir != null) triggerScan(selectedDir.toPath());
+        if (selectedDir != null) {
+            setSelectedDirectory(selectedDir.toPath());
+        }
     }
 
-    private void triggerScan(Path directory) {
+    /**
+     * 記錄選定的資料夾路徑，更新 UI 提示，啟用掃描按鈕。
+     * 不執行掃描。
+     */
+    private void setSelectedDirectory(Path directory) {
+        currentDirectory = directory;
+
+        // 更新拖曳區提示文字
+        if (lblDropHint != null)
+            lblDropHint.setText("📂 已選擇：" + directory.toAbsolutePath()
+                + "　← 確認掃描深度後，按「🔍 掃描」開始");
+
+        // 啟用掃描按鈕
+        if (btnScan != null)
+            btnScan.setDisable(false);
+
+        if (lblStatus != null)
+            lblStatus.appendText("[系統] 已選擇資料夾：" + directory.toAbsolutePath()
+                + "　請確認掃描深度後按「掃描」。\n");
+    }
+
+    /**
+     * 實際執行掃描（只有按下掃描鍵才呼叫）。
+     */
+    private void executeScan(Path directory) {
         OrganizerFacade facade = AppContext.get().getFacade();
         AppConfig config       = AppContext.get().getConfig();
 
@@ -276,8 +328,6 @@ public class MainController {
 
         boolean wasWatching = facade.isWatching();
         if (wasWatching) facade.stopWatch();
-
-        currentDirectory = directory;
 
         facade.scanAsync(directory, count -> {
             if (wasWatching || (toggleWatch != null && toggleWatch.isSelected())) {
