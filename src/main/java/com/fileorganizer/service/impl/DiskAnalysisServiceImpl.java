@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox prefHeight="640.0" prefWidth="960.0" spacing="10.0"
+      xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.fileorganizer.controller.MainController">
+    <padding>
+        <Insets bottom="15.0" left="15.0" right="15.0" top="15.0" />
+    </padding>
+    <children>
+
+        <!-- ── 工具列 ─────────────────────────────────────────────────── -->
+        <HBox alignment="CENTER_LEFT" spacing="15.0" styleClass="section-box">
+            <children>
+                <Label style="-fx-font-weight: bold;" text="操作：" />
+
+                <CheckBox fx:id="chkDryRun" text="預覽模式（不實際搬移）" />
+
+                <CheckBox fx:id="toggleWatch" text="即時監控資料夾" />
+
+                <Separator orientation="VERTICAL" />
+
+                <Label text="掃描深度：" />
+                <Spinner fx:id="spinnerDepth"
+                         min="1" max="10" initialValue="1"
+                         prefWidth="70.0"
+                         editable="true" />
+                <Label text="層" />
+
+                <Separator orientation="VERTICAL" />
+
+                <Button mnemonicParsing="false"
+                        onAction="#onOpenDiskDashboard"
+                        text="磁碟分析" />
+
+                <Region HBox.hgrow="ALWAYS" />
+
+                <Button mnemonicParsing="false"
+                        onAction="#handleOrganize"
+                        styleClass="button-primary"
+                        text="▶ 開始整理" />
+
+                <Button mnemonicParsing="false"
+                        onAction="#handleUndo"
+                        styleClass="button-secondary"
+                        text="↩ 復原上一次操作" />
+            </children>
+        </HBox>
+
+        <!-- ── 拖曳區 ─────────────────────────────────────────────────── -->
+        <VBox fx:id="dropPane"
+              alignment="CENTER"
+              onDragDropped="#handleDragDropped"
+              onDragOver="#handleDragOver"
+              prefHeight="120.0"
+              styleClass="drop-shadow-pane"
+              VBox.vgrow="NEVER">
+            <children>
+                <Label style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;"
+                       text="📂 將要整理的資料夾拖曳至此處，或點擊選擇資料夾" />
+            </children>
+        </VBox>
+
+        <!-- ── 主內容：日誌 + 檔案清單 ───────────────────────────────── -->
+        <SplitPane dividerPositions="0.35" VBox.vgrow="ALWAYS">
+            <items>
+
+                <!-- 左：日誌 -->
+                <VBox spacing="5.0">
+                    <children>
+                        <Label style="-fx-font-weight: bold;" text="執行進度與日誌：" />
+                        <TextArea fx:id="lblStatus"
+                                  editable="false"
+                                  styleClass="log-area"
+                                  VBox.vgrow="ALWAYS" />
+                    </children>
+                </VBox>
+
+                <!-- 右：檔案清單 -->
+                <VBox spacing="5.0">
+                    <children>
+                        <Label style="-fx-font-weight: bold;" text="檔案處理清單：" />
+                        <TableView fx:id="fileTable" VBox.vgrow="ALWAYS">
+                            <columns>
+                                <TableColumn fx:id="colName"   prefWidth="180.0" text="檔案名稱" />
+                                <TableColumn fx:id="colPath"   prefWidth="240.0" text="原始路徑" />
+                                <TableColumn fx:id="colSize"   prefWidth="90.0"  text="大小" />
+                                <TableColumn fx:id="colStatus" prefWidth="100.0" text="狀態" />
+                            </columns>
+                            <placeholder>
+                                <Label text="尚未掃描任何檔案" />
+                            </placeholder>
+                        </TableView>
+                    </children>
+                </VBox>
+
+            </items>
+        </SplitPane>
+
+    </children>
+</VBox>

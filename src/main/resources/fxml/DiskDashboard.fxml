@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.chart.*?>
+<?import javafx.geometry.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.fileorganizer.controller.DiskDashboardController"
+            prefWidth="900" prefHeight="620">
+
+    <top>
+        <HBox spacing="10" style="-fx-padding: 12; -fx-background-color: #f5f5f5;
+                                   -fx-border-color: #e0e0e0; -fx-border-width: 0 0 1 0;">
+            <TextField fx:id="pathField"
+                       maxWidth="Infinity"
+                       HBox.hgrow="ALWAYS"
+                       promptText="選擇要分析的資料夾..."
+                       editable="false"/>
+            <Button text="選擇資料夾" onAction="#onChooseFolder"/>
+            <Button fx:id="scanBtn" text="開始分析" onAction="#onScan"
+                    style="-fx-background-color: #378ADD; -fx-text-fill: white;
+                           -fx-background-radius: 6;"/>
+        </HBox>
+    </top>
+
+    <center>
+        <VBox>
+
+            <ProgressBar fx:id="progressBar"
+                         maxWidth="Infinity"
+                         prefHeight="4"
+                         visible="false"/>
+
+            <Label fx:id="statusLabel"
+                   text="請選擇資料夾後按「開始分析」"
+                   style="-fx-padding: 6 12; -fx-font-size: 12;
+                          -fx-text-fill: #888780;"/>
+
+            <HBox spacing="16" VBox.vgrow="ALWAYS"
+                  style="-fx-padding: 16;">
+
+                <VBox spacing="8" prefWidth="360">
+                    <Label text="檔案類型分佈"
+                           style="-fx-font-size: 14; -fx-font-weight: bold;"/>
+                    <PieChart fx:id="pieChart"
+                              prefHeight="280"
+                              legendVisible="false"
+                              labelsVisible="false"/>
+                    <VBox fx:id="legendBox" spacing="6"/>
+                </VBox>
+
+                <VBox spacing="8" HBox.hgrow="ALWAYS">
+                    <Label text="資料夾空間佔用 Top 10"
+                           style="-fx-font-size: 14; -fx-font-weight: bold;"/>
+                    <TableView fx:id="folderTable" VBox.vgrow="ALWAYS">
+                        <columns>
+                            <TableColumn fx:id="folderNameCol"
+                                         text="資料夾"
+                                         prefWidth="200"/>
+                            <TableColumn fx:id="folderSizeCol"
+                                         text="大小"
+                                         prefWidth="160"/>
+                            <TableColumn fx:id="folderCountCol"
+                                         text="檔案數"
+                                         prefWidth="80"/>
+                        </columns>
+                        <placeholder>
+                            <Label text="尚無資料，請先執行分析"/>
+                        </placeholder>
+                    </TableView>
+                </VBox>
+
+            </HBox>
+
+            <HBox fx:id="statCards"
+                  spacing="12"
+                  style="-fx-padding: 0 16 16 16;"/>
+
+        </VBox>
+    </center>
+
+</BorderPane>
