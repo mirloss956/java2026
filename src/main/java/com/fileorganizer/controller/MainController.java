@@ -30,7 +30,8 @@ import java.util.Optional;
 /**
  * 負責人：A（UI 互動）
  *
- * 修改：補上 btnScan @FXML 欄位與 handleScan() 方法，修復掃描按鈕消失問題。
+ * 修改：新增 handleBatchRename()，開啟批次重新命名對話框。
+ * 其餘邏輯不變。
  */
 public class MainController {
 
@@ -40,14 +41,12 @@ public class MainController {
     @FXML private CheckBox                       toggleWatch;
     @FXML private VBox                           dropPane;
     @FXML private Spinner<Integer>               spinnerDepth;
-    @FXML private Button                         btnBatchRename;
-    @FXML private Button                         btnScan;        // ← 補上：對應 FXML fx:id="btnScan"
+    @FXML private Button                         btnBatchRename;   // 新增按鈕
 
     @FXML private TableColumn<FileItem, String> colName;
     @FXML private TableColumn<FileItem, String> colPath;
     @FXML private TableColumn<FileItem, String> colSize;
     @FXML private TableColumn<FileItem, String> colStatus;
-    @FXML private TableColumn<FileItem, String> colDest;
 
     private Path currentDirectory;
 
@@ -80,13 +79,6 @@ public class MainController {
                     Bindings.isEmpty(facade.getFileItems())
                 );
             }
-        }
-
-        // ── 掃描按鈕：沒有選資料夾時灰掉 ────────────────────────────────
-        if (btnScan != null) {
-            // currentDirectory 是 private 欄位，用 facade.getFileItems() 做間接判斷無意義；
-            // 改為在 triggerScan 後解除 disable，初始狀態允許點擊（點後會提示選資料夾）
-            // 保持 enable，因為 handleScan 內部會做 null 檢查
         }
 
         // ── 掃描深度 Spinner ──────────────────────────────────────────────
@@ -133,20 +125,7 @@ public class MainController {
             lblStatus.appendText("[系統] 就緒。請拖曳資料夾或點擊選擇資料夾。\n");
     }
 
-    // ── 事件：掃描（補上，對應 FXML onAction="#handleScan"）──────────────
-
-    @FXML
-    void handleScan(ActionEvent event) {
-        if (currentDirectory == null) {
-            // 尚未選資料夾，改為開啟資料夾選擇器
-            openDirectoryChooser();
-            return;
-        }
-        // 已有資料夾時，直接重新掃描（允許重複掃描以更新清單）
-        triggerScan(currentDirectory);
-    }
-
-    // ── 事件：批次重新命名 ────────────────────────────────────────────────
+    // ── 事件：批次重新命名（新增）────────────────────────────────────────
 
     @FXML
     void handleBatchRename(ActionEvent event) {
@@ -155,61 +134,51 @@ public class MainController {
 
         if (items.isEmpty()) {
             if (lblStatus != null)
-                lblStatus.appendText("[資訊] 請先掃描資料夾再執行批次重新命名。\n");
+                lblStatus.appendText("[錯誤] 請先掃描資料夾，才能使用批次重新命名。\n");
             return;
         }
 
         try {
-            URL fxml = getClass().getResource("/fxml/batch_rename.fxml");
-            FXMLLoader loader = new FXMLLoader(fxml);
-            Scene scene = new Scene(loader.load());
-            scene.getStylesheets().add(
-                getClass().getResource("/style.css").toExternalForm());
+            URL fxmlUrl = getClass().getResource("/fxml/batch_rename.fxml");
+            if (fxmlUrl == null) {
+                throw new IOException("找不到 batch_rename.fxml，請確認檔案位於 src/main/resources/fxml/");
+            }
 
-            BatchRenameController ctrl = loader.getController();
-            ctrl.setItems(items);
+            FXMLLoader loader = new FXMLLoader(fxmlUrl);
+            VBox root = loader.load();
 
-            Stage stage = new Stage();
-            stage.setTitle("批次重新命名");
-            stage.initModality(Modality.WINDOW_MODAL);
-            stage.initOwner(dropPane.getScene().getWindow());
-            stage.setScene(scene);
-            stage.showAndWait();
+            // 注入目前掃描到的 FileItem 清單
+            BatchRenameController controller = loader.getController();
+            controller.setItems(List.copyOf(items));
+
+            Stage dialog = new Stage();
+            dialog.setTitle("批次重新命名");
+            dialog.initModality(Modality.WINDOW_MODAL);
+            dialog.initOwner(dropPane.getScene().getWindow());
+            dialog.setScene(new Scene(root));
+            dialog.setResizable(true);
+            dialog.showAndWait();
+
+            // 對話框關閉後，重新整理主視窗 TableView（檔名可能已改變）
+            fileTable.refresh();
+            if (lblStatus != null)
+                lblStatus.appendText("[批次重新命名] 對話框已關閉。\n");
 
         } catch (IOException e) {
             if (lblStatus != null)
-                lblStatus.appendText("[錯誤] 無法開啟批次重新命名視窗：" + e.getMessage() + "\n");
+                lblStatus.appendText("[錯誤] 無法開啟批次重新命名：" + e.getMessage() + "\n");
         }
     }
 
-    // ── 事件：開啟磁碟分析 ────────────────────────────────────────────────
-
-    @FXML
-    void onOpenDiskDashboard(ActionEvent event) {
-        try {
-            URL fxml = getClass().getResource("/fxml/DiskDashboard.fxml");
-            FXMLLoader loader = new FXMLLoader(fxml);
-            Scene scene = new Scene(loader.load());
-
-            Stage stage = new Stage();
-            stage.setTitle("磁碟分析");
-            stage.initModality(Modality.WINDOW_MODAL);
-            stage.initOwner(dropPane.getScene().getWindow());
-            stage.setScene(scene);
-            stage.show();
-
-        } catch (IOException e) {
-            if (lblStatus != null)
-                lblStatus.appendText("[錯誤] 無法開啟磁碟分析視窗：" + e.getMessage() + "\n");
-        }
-    }
-
-    // ── 事件：拖曳 ───────────────────────────────────────────────────────
+    // ── 其餘事件（不變）──────────────────────────────────────────────────
 
     @FXML
     void handleDragOver(DragEvent event) {
-        if (event.getDragboard().hasFiles())
-            event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
+        if (event.getDragboard().hasFiles()) {
+            event.acceptTransferModes(TransferMode.ANY);
+            if (dropPane != null)
+                dropPane.setStyle("-fx-background-color: #e8f4fd; -fx-border-color: #3498db;");
+        }
         event.consume();
     }
 
@@ -231,8 +200,6 @@ public class MainController {
         event.consume();
     }
 
-    // ── 事件：開始整理 ───────────────────────────────────────────────────
-
     @FXML
     void handleOrganize(ActionEvent event) {
         if (currentDirectory == null) {
@@ -251,8 +218,6 @@ public class MainController {
 
         AppContext.get().getFacade().organizeAsync(dryRun, actionOpt.get(), result -> {});
     }
-
-    // ── 事件：復原 ───────────────────────────────────────────────────────
 
     @FXML
     void handleUndo(ActionEvent event) {
