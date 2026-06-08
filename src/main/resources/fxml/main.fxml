@@ -57,7 +57,7 @@
                 <TextField fx:id="txtSearch"
                            HBox.hgrow="ALWAYS"
                            prefHeight="30.0"
-                           promptText="輸入關鍵字以檢索 .txt / .md / .docx / .pdf 內文段落，或自動比對目錄內相似圖片 (pHash)..." />
+                           promptText="輸入關鍵字以檢索 .txt / .md / .docx / .pdf 內文段落..." />
 
                 <Button fx:id="btnSearch"
                         mnemonicParsing="false"
@@ -66,6 +66,16 @@
                         prefWidth="100.0"
                         style="-fx-background-color: #3b82f6; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"
                         text="搜尋內容" />
+
+                <Separator orientation="VERTICAL" />
+
+                <Button fx:id="btnCompareImages"
+                        mnemonicParsing="false"
+                        onAction="#handleCompareImages"
+                        prefHeight="30.0"
+                        prefWidth="130.0"
+                        style="-fx-background-color: #10b981; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"
+                        text="📸 對比相似圖片" />
             </children>
         </HBox>
 

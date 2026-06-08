@@ -33,9 +33,10 @@ public class MainController {
     @FXML private HBox                            scanningIndicator;
     @FXML private Label                           lblScanningHint;
 
-    // ── A 自己實作的進階功能組件 ─────────────────────────────────────────────
-    @FXML private TextField txtSearch;      // 搜尋輸入框
-    @FXML private Button btnSearch;        // 搜尋按鈕
+    // ── A 自己實作的進階功能組件（已清理重複宣告，並加入對比按鈕） ─────────────────
+    @FXML private TextField txtSearch;         // 搜尋輸入框
+    @FXML private Button btnSearch;           // 搜尋按鈕
+    @FXML private Button btnCompareImages;    // 🎯 新增的對比圖片按鈕
 
     @FXML private Button                          btnScan;
     @FXML private Button                          btnOrganize;
@@ -71,25 +72,25 @@ public class MainController {
 
             if (colName != null)
                 colName.setCellValueFactory(
-                    cd -> new SimpleStringProperty(cd.getValue().getFileName()));
+                        cd -> new SimpleStringProperty(cd.getValue().getFileName()));
             if (colPath != null)
                 colPath.setCellValueFactory(
-                    cd -> new SimpleStringProperty(cd.getValue().getSourcePath().toString()));
+                        cd -> new SimpleStringProperty(cd.getValue().getSourcePath().toString()));
             if (colSize != null)
                 colSize.setCellValueFactory(
-                    cd -> new SimpleStringProperty(
-                        FileSizeUtil.humanReadable(cd.getValue().getSizeBytes())));
+                        cd -> new SimpleStringProperty(
+                                FileSizeUtil.humanReadable(cd.getValue().getSizeBytes())));
             if (colStatus != null)
                 colStatus.setCellValueFactory(
-                    cd -> new SimpleStringProperty(cd.getValue().getStatus().name()));
+                        cd -> new SimpleStringProperty(cd.getValue().getStatus().name()));
             if (colDest != null)
                 colDest.setCellValueFactory(cd -> {
                     Path dest = cd.getValue().getDestinationPath();
                     if (dest == null) return new SimpleStringProperty("—");
                     int count = dest.getNameCount();
                     String display = count >= 2
-                        ? dest.getName(count - 2) + "/" + dest.getName(count - 1)
-                        : dest.getFileName().toString();
+                            ? dest.getName(count - 2) + "/" + dest.getName(count - 1)
+                            : dest.getFileName().toString();
                     return new SimpleStringProperty(display);
                 });
         }
@@ -97,7 +98,7 @@ public class MainController {
         // ── 掃描深度 Spinner ────────────────────────────────────────────────────
         if (spinnerDepth != null) {
             SpinnerValueFactory<Integer> valueFactory =
-                new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 10, config.getScanDepth());
+                    new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 10, config.getScanDepth());
             spinnerDepth.setValueFactory(valueFactory);
             spinnerDepth.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
                 if (!isNowFocused) spinnerDepth.increment(0);
@@ -205,7 +206,7 @@ public class MainController {
     void handleScan(ActionEvent event) {
         if (currentDirectory == null) {
             if (lblStatus != null)
-                lblStatus.appendText("[錯誤] 請先選擇或拖曳一個資料夾。\n");
+                getLblStatusAppend("[錯誤] 請先選擇或拖曳一個資料夾。\n");
             return;
         }
         triggerScan(currentDirectory);
@@ -215,7 +216,7 @@ public class MainController {
     void handleOrganize(ActionEvent event) {
         if (currentDirectory == null) {
             if (lblStatus != null)
-                lblStatus.appendText("[錯誤] 請先選擇或拖曳一個資料夾再整理。\n");
+                getLblStatusAppend("[錯誤] 請先選擇或拖曳一個資料夾再整理。\n");
             return;
         }
 
@@ -224,13 +225,11 @@ public class MainController {
         Optional<DuplicateAction> actionOpt = DuplicateActionDialog.show();
         if (actionOpt.isEmpty()) {
             if (lblStatus != null)
-                lblStatus.appendText("[資訊] 已取消整理。\n");
+                getLblStatusAppend("[資訊] 已取消整理。\n");
             return;
         }
 
         AppContext.get().getFacade().organizeAsync(dryRun, actionOpt.get(), result -> {
-            // 預覽模式完成後回到 SCANNED，讓使用者可以繼續按整理
-            // 真正整理完成後進入 ORGANIZED，需要重新掃描才能再整理
             if (dryRun) {
                 setState(AppState.SCANNED);
             } else {
@@ -242,10 +241,9 @@ public class MainController {
     @FXML
     void handleUndo(ActionEvent event) {
         AppContext.get().getFacade().undoAsync(() -> {
-            // 復原完成後回到 FOLDER_SELECTED，強制重新掃描
             setState(AppState.FOLDER_SELECTED);
             if (lblStatus != null)
-                lblStatus.appendText("[系統] 請重新掃描以確認復原結果。\n");
+                getLblStatusAppend("[系統] 請重新掃描以確認復原結果。\n");
         });
     }
 
@@ -253,7 +251,7 @@ public class MainController {
     void onOpenDiskDashboard(ActionEvent event) {
         try {
             javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
-                getClass().getResource("/fxml/DiskDashboard.fxml"));
+                    getClass().getResource("/fxml/DiskDashboard.fxml"));
             javafx.scene.Parent root = loader.load();
 
             javafx.stage.Stage stage = new javafx.stage.Stage();
@@ -264,24 +262,24 @@ public class MainController {
 
         } catch (java.io.IOException e) {
             if (lblStatus != null)
-                lblStatus.appendText("[錯誤] 無法開啟磁碟分析視窗：" + e.getMessage() + "\n");
+                getLblStatusAppend("[錯誤] 無法開啟磁碟分析視窗：" + e.getMessage() + "\n");
             e.printStackTrace();
         }
     }
 
-    // ── A 獨立實作：全文檢索與 pHash 相似圖片偵測 ─────────────────────────────────
+    // ── 🎯 功能拆分一：純關鍵字內文搜尋 ──────────────────────────────────────────
     @FXML
     void handleSearch(ActionEvent event) {
         if (txtSearch == null) return;
 
         String keyword = txtSearch.getText().trim();
         if (keyword.isEmpty()) {
-            if (lblStatus != null) lblStatus.appendText("[提示] 請輸入關鍵字再進行全文檢索。\n");
+            if (lblStatus != null) getLblStatusAppend("[提示] 請輸入關鍵字再進行全文檢索。\n");
             return;
         }
 
         if (currentDirectory == null) {
-            if (lblStatus != null) lblStatus.appendText("[警告] 請先選擇或拖曳一個目標資料夾！\n");
+            if (lblStatus != null) getLblStatusAppend("[警告] 請先選擇或拖曳一個目標資料夾！\n");
             return;
         }
 
@@ -289,25 +287,23 @@ public class MainController {
         if (!folder.exists() || !folder.isDirectory()) return;
 
         if (lblStatus != null) {
-            lblStatus.appendText(String.format("\n🔍 [A 的黑科技啟動] 正在深層檢索「%s」內文與圖片特徵...\n", folder.getName()));
+            getLblStatusAppend(String.format("\n🔍 [全文檢索] 正在搜尋「%s」內文關鍵字: \"%s\"...\n", folder.getName(), keyword));
         }
 
-        // 清空當前表格，準備注入你搜尋到的真實結果
+        // 清空當前表格，只塞入文字搜尋結果
         fileTable.getItems().clear();
 
-        // 為了避免大檔案讀取導致 UI 卡死，開闢獨立執行緒處理
         new Thread(() -> {
             File[] files = folder.listFiles();
             if (files == null) return;
 
             java.util.List<FileItem> matchResults = new java.util.ArrayList<>();
-            java.util.List<File> imageFiles = new java.util.ArrayList<>();
 
             for (File file : files) {
                 if (file.isDirectory()) continue;
                 String filename = file.getName().toLowerCase();
 
-                // 📄 1. 全文檢索 (.txt, .md, .docx, .pdf)
+                // 📄 僅處理文字相關檔案 (.txt, .md, .docx, .pdf)
                 if (filename.endsWith(".txt") || filename.endsWith(".md") || filename.endsWith(".docx") || filename.endsWith(".pdf")) {
                     String content = com.fileorganizer.util.FileTextExtractor.extractText(file);
 
@@ -319,29 +315,61 @@ public class MainController {
 
                         Platform.runLater(() -> {
                             if (lblStatus != null) {
-                                lblStatus.appendText(String.format("🎯 [內文匹配] 在《%s》內發現關鍵字！\n   👉 \"...%s...\"\n", file.getName(), snippet));
+                                getLblStatusAppend(String.format("🎯 [內文匹配] 在《%s》內發現關鍵字！\n   👉 \"...%s...\"\n", file.getName(), snippet));
                             }
                         });
 
-                        // 使用小組正式的 FileItem 規格建立實體
                         FileItem matchItem = new FileItem(file.toPath(), file.length(), java.time.LocalDateTime.now());
                         matchItem.setStatus(com.fileorganizer.model.FileStatus.PENDING);
                         matchResults.add(matchItem);
                     }
                 }
+            }
 
-                // 收集圖片以便後續進行 pHash 相似度比對
+            Platform.runLater(() -> {
+                fileTable.getItems().addAll(matchResults);
+                if (lblStatus != null) getLblStatusAppend("[完成] 關鍵字內文檢索結束。\n");
+            });
+
+        }).start();
+    }
+
+    // ── 🎯 功能拆分二：獨立的圖片感知雜湊（pHash）相似度對比 ─────────────────────────
+    @FXML
+    void handleCompareImages(ActionEvent event) {
+        if (currentDirectory == null) {
+            if (lblStatus != null) getLblStatusAppend("[警告] 請先選擇或拖曳一個目標資料夾，才能對比圖片！\n");
+            return;
+        }
+
+        File folder = currentDirectory.toFile();
+        if (!folder.exists() || !folder.isDirectory()) return;
+
+        if (lblStatus != null) {
+            getLblStatusAppend(String.format("\n📸 [pHash 圖像分析] 正在計算「%s」目錄內所有圖片的視覺特徵...\n", folder.getName()));
+        }
+
+        // 清空表格，專注呈現相似圖片的結果
+        fileTable.getItems().clear();
+
+        new Thread(() -> {
+            File[] files = folder.listFiles();
+            if (files == null) return;
+
+            java.util.List<FileItem> matchResults = new java.util.ArrayList<>();
+            java.util.List<File> imageFiles = new java.util.ArrayList<>();
+
+            // 僅收集圖片格式檔案
+            for (File file : files) {
+                if (file.isDirectory()) continue;
+                String filename = file.getName().toLowerCase();
                 if (filename.endsWith(".jpg") || filename.endsWith(".jpeg") || filename.endsWith(".png")) {
                     imageFiles.add(file);
                 }
             }
 
-            // 📸 2. pHash 相似圖片偵測
+            // 開始進行雙重比對
             if (imageFiles.size() > 1) {
-                Platform.runLater(() -> {
-                    if (lblStatus != null) lblStatus.appendText("[pHash 檢索] 正在計算目錄內所有圖片的感知雜湊值...\n");
-                });
-
                 for (int i = 0; i < imageFiles.size(); i++) {
                     for (int j = i + 1; j < imageFiles.size(); j++) {
                         File imgA = imageFiles.get(i);
@@ -352,11 +380,11 @@ public class MainController {
 
                         double similarity = com.fileorganizer.util.ImagePHash.calculateSimilarity(hashA, hashB);
 
-                        // 相似度大於 85% 判定為驚人相似
+                        // 相似度大於 85% 判定為高度相似圖片
                         if (similarity >= 0.85) {
                             Platform.runLater(() -> {
                                 if (lblStatus != null) {
-                                    lblStatus.appendText(String.format("⚠️ [圖片相似] 偵測到高度相似圖片！\n   🖼️ 圖片A: %s\n   🖼️ 圖片B: %s\n   📈 pHash 相似度: %.1f%%\n",
+                                    getLblStatusAppend(String.format("⚠️ [圖片相似] 偵測到高度相似圖片！\n   🖼️ 圖片A: %s\n   🖼️ 圖片B: %s\n   📈 pHash 相似度: %.1f%%\n",
                                             imgA.getName(), imgB.getName(), similarity * 100));
                                 }
                             });
@@ -369,15 +397,23 @@ public class MainController {
                         }
                     }
                 }
+            } else {
+                Platform.runLater(() -> {
+                    if (lblStatus != null) getLblStatusAppend("[提示] 目錄內圖片數量小於 2 張，無法進行相似度對比。\n");
+                });
             }
 
-            // 將搜尋與比對結果刷新回小組的 fileTable
+            // 刷新結果回 UI
             Platform.runLater(() -> {
                 fileTable.getItems().addAll(matchResults);
-                if (lblStatus != null) lblStatus.appendText("\n[完成] 全文檢索與視覺比對程序結束。\n");
+                if (lblStatus != null) getLblStatusAppend("[完成] 相似圖片感知雜湊對比結束。\n");
             });
 
         }).start();
+    }
+
+    private void getLblStatusAppend(String x) {
+        lblStatus.appendText(x);
     }
 
     // ── 私有工具 ──────────────────────────────────────────────────────────────
@@ -394,13 +430,13 @@ public class MainController {
 
         if (lblDropHint != null) {
             lblDropHint.setText("📂 已選擇：" + directory.toAbsolutePath()
-                + "　（調整好深度後按「掃描」）");
+                    + " （調整好深度後按「掃描」）");
             lblDropHint.setStyle("-fx-font-size: 14px; -fx-text-fill: #2563eb;");
         }
 
         if (lblStatus != null)
-            lblStatus.appendText("[系統] 已選擇資料夾：" + directory.toAbsolutePath()
-                + "，請調整掃描深度後按「掃描」。\n");
+            getLblStatusAppend("[系統] 已選擇資料夾：" + directory.toAbsolutePath()
+                    + "，請調整掃描深度後按「掃描」。\n");
 
         setState(AppState.FOLDER_SELECTED);
     }
