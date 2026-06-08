@@ -1,105 +1,127 @@
-<?xml version="1.0" encoding="UTF-8"?>
+package com.fileorganizer.service.impl;
 
-<?import javafx.geometry.Insets?>
-<?import javafx.scene.control.*?>
-<?import javafx.scene.layout.*?>
+import com.fileorganizer.model.DiskStats;
+import com.fileorganizer.model.DiskStats.CategoryStats;
+import com.fileorganizer.model.FolderStats;
+import com.fileorganizer.service.DiskAnalysisService;
 
-<VBox prefHeight="640.0" prefWidth="960.0" spacing="10.0"
-      xmlns="http://javafx.com/javafx/17"
-      xmlns:fx="http://javafx.com/fxml/1"
-      fx:controller="com.fileorganizer.controller.MainController">
-    <padding>
-        <Insets bottom="15.0" left="15.0" right="15.0" top="15.0" />
-    </padding>
-    <children>
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
-        <!-- ── 工具列 ─────────────────────────────────────────────────── -->
-        <HBox alignment="CENTER_LEFT" spacing="15.0" styleClass="section-box">
-            <children>
-                <Label style="-fx-font-weight: bold;" text="操作：" />
+public class DiskAnalysisServiceImpl implements DiskAnalysisService {
 
-                <CheckBox fx:id="chkDryRun" text="預覽模式（不實際搬移）" />
+    private static final Map<String, String> EXT_MAP = Map.ofEntries(
+        Map.entry("jpg",  "圖片"), Map.entry("jpeg", "圖片"),
+        Map.entry("png",  "圖片"), Map.entry("gif",  "圖片"),
+        Map.entry("webp", "圖片"), Map.entry("heic", "圖片"),
+        Map.entry("mp4",  "影片"), Map.entry("mov",  "影片"),
+        Map.entry("avi",  "影片"), Map.entry("mkv",  "影片"),
+        Map.entry("mp3",  "音樂"), Map.entry("wav",  "音樂"),
+        Map.entry("flac", "音樂"), Map.entry("aac",  "音樂"),
+        Map.entry("pdf",  "文件"), Map.entry("docx", "文件"),
+        Map.entry("xlsx", "文件"), Map.entry("pptx", "文件"),
+        Map.entry("txt",  "文件"),
+        Map.entry("java", "程式碼"), Map.entry("py", "程式碼"),
+        Map.entry("js",   "程式碼"), Map.entry("ts", "程式碼"),
+        Map.entry("zip",  "壓縮檔"), Map.entry("rar", "壓縮檔"),
+        Map.entry("7z",   "壓縮檔"), Map.entry("tar", "壓縮檔")
+    );
 
-                <CheckBox fx:id="toggleWatch" text="即時監控資料夾" />
+    private static final Map<String, String> COLOR_MAP = Map.of(
+        "圖片",   "#378ADD",
+        "影片",   "#D85A30",
+        "音樂",   "#1D9E75",
+        "文件",   "#7F77DD",
+        "程式碼", "#BA7517",
+        "壓縮檔", "#D4537E",
+        "其他",   "#888780"
+    );
 
-                <Separator orientation="VERTICAL" />
+    private final ExecutorService executor = Executors.newWorkStealingPool();
 
-                <Label text="掃描深度：" />
-                <Spinner fx:id="spinnerDepth"
-                         min="1" max="10" initialValue="1"
-                         prefWidth="70.0"
-                         editable="true" />
-                <Label text="層" />
+    @Override
+    public CompletableFuture<DiskStats> analyze(Path root, Consumer<Long> onProgress) {
+        return CompletableFuture.supplyAsync(() -> {
 
-                <Separator orientation="VERTICAL" />
+            Map<String, Long>    catBytes = new ConcurrentHashMap<>();
+            Map<String, Integer> catCount = new ConcurrentHashMap<>();
+            AtomicLong totalBytes = new AtomicLong();
+            AtomicLong totalCount = new AtomicLong();
 
-                <Button mnemonicParsing="false"
-                        onAction="#onOpenDiskDashboard"
-                        text="磁碟分析" />
+            try {
+                Files.walk(root)
+                     .parallel()
+                     .filter(Files::isRegularFile)
+                     .forEach(file -> {
+                         try {
+                             long size = Files.size(file);
+                             String cat = classify(file);
+                             totalBytes.addAndGet(size);
+                             catBytes.merge(cat, size, Long::sum);
+                             catCount.merge(cat, 1, Integer::sum);
+                             long n = totalCount.incrementAndGet();
+                             if (n % 200 == 0) onProgress.accept(n);
+                         } catch (IOException ignored) {}
+                     });
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
 
-                <Region HBox.hgrow="ALWAYS" />
+            List<CategoryStats> stats = catBytes.entrySet().stream()
+                .map(e -> new CategoryStats(
+                    e.getKey(),
+                    COLOR_MAP.getOrDefault(e.getKey(), "#888780"),
+                    e.getValue(),
+                    catCount.getOrDefault(e.getKey(), 0)
+                ))
+                .sorted(Comparator.comparingLong(CategoryStats::bytes).reversed())
+                .collect(Collectors.toList());
 
-                <Button mnemonicParsing="false"
-                        onAction="#handleOrganize"
-                        styleClass="button-primary"
-                        text="▶ 開始整理" />
+            return new DiskStats(totalBytes.get(), totalCount.get(), stats);
 
-                <Button mnemonicParsing="false"
-                        onAction="#handleUndo"
-                        styleClass="button-secondary"
-                        text="↩ 復原上一次操作" />
-            </children>
-        </HBox>
+        }, executor);
+    }
 
-        <!-- ── 拖曳區 ─────────────────────────────────────────────────── -->
-        <VBox fx:id="dropPane"
-              alignment="CENTER"
-              onDragDropped="#handleDragDropped"
-              onDragOver="#handleDragOver"
-              prefHeight="120.0"
-              styleClass="drop-shadow-pane"
-              VBox.vgrow="NEVER">
-            <children>
-                <Label style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;"
-                       text="📂 將要整理的資料夾拖曳至此處，或點擊選擇資料夾" />
-            </children>
-        </VBox>
+    @Override
+    public CompletableFuture<FolderStats> buildFolderTree(Path root) {
+        return CompletableFuture.supplyAsync(() -> buildNode(root), executor);
+    }
 
-        <!-- ── 主內容：日誌 + 檔案清單 ───────────────────────────────── -->
-        <SplitPane dividerPositions="0.35" VBox.vgrow="ALWAYS">
-            <items>
+    private FolderStats buildNode(Path dir) {
+        List<FolderStats> children = new ArrayList<>();
+        AtomicLong dirBytes = new AtomicLong();
+        AtomicInteger dirCount = new AtomicInteger();
 
-                <!-- 左：日誌 -->
-                <VBox spacing="5.0">
-                    <children>
-                        <Label style="-fx-font-weight: bold;" text="執行進度與日誌：" />
-                        <TextArea fx:id="lblStatus"
-                                  editable="false"
-                                  styleClass="log-area"
-                                  VBox.vgrow="ALWAYS" />
-                    </children>
-                </VBox>
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+            for (Path entry : stream) {
+                if (Files.isDirectory(entry)) {
+                    FolderStats child = buildNode(entry);
+                    children.add(child);
+                    dirBytes.addAndGet(child.bytes());
+                    dirCount.addAndGet(child.fileCount());
+                } else if (Files.isRegularFile(entry)) {
+                    try {
+                        dirBytes.addAndGet(Files.size(entry));
+                        dirCount.incrementAndGet();
+                    } catch (IOException ignored) {}
+                }
+            }
+        } catch (IOException ignored) {}
 
-                <!-- 右：檔案清單 -->
-                <VBox spacing="5.0">
-                    <children>
-                        <Label style="-fx-font-weight: bold;" text="檔案處理清單：" />
-                        <TableView fx:id="fileTable" VBox.vgrow="ALWAYS">
-                            <columns>
-                                <TableColumn fx:id="colName"   prefWidth="180.0" text="檔案名稱" />
-                                <TableColumn fx:id="colPath"   prefWidth="240.0" text="原始路徑" />
-                                <TableColumn fx:id="colSize"   prefWidth="90.0"  text="大小" />
-                                <TableColumn fx:id="colStatus" prefWidth="100.0" text="狀態" />
-                            </columns>
-                            <placeholder>
-                                <Label text="尚未掃描任何檔案" />
-                            </placeholder>
-                        </TableView>
-                    </children>
-                </VBox>
+        children.sort(Comparator.comparingLong(FolderStats::bytes).reversed());
+        return new FolderStats(dir, dirBytes.get(), dirCount.get(), children);
+    }
 
-            </items>
-        </SplitPane>
-
-    </children>
-</VBox>
+    private static String classify(Path file) {
+        String name = file.getFileName().toString();
+        int dot = name.lastIndexOf('.');
+        if (dot < 0) return "其他";
+        String ext = name.substring(dot + 1).toLowerCase(Locale.ROOT);
+        return EXT_MAP.getOrDefault(ext, "其他");
+    }
+}
