@@ -1,5 +1,3 @@
-```java
-// model/DiskStats.java
 package com.fileorganizer.model;
 
 import java.util.List;
@@ -7,19 +5,17 @@ import java.util.List;
 public record DiskStats(
     long totalBytes,
     long fileCount,
-    List<CategoryStats> byCategory  // 給圓餅圖
+    List<CategoryStats> byCategory
 ) {
-    // 每個類別的統計
     public record CategoryStats(
-        String name,        // "圖片", "影片", "文件"...
-        String hexColor,    // "#378ADD"
+        String name,
+        String hexColor,
         long bytes,
         int count
     ) {
         public double percent(long total) {
             return total == 0 ? 0 : bytes * 100.0 / total;
         }
-
         public String formattedSize() {
             return DiskStats.humanReadable(bytes);
         }
@@ -36,4 +32,3 @@ public record DiskStats(
         return bytes + " B";
     }
 }
-```
