@@ -1,17 +1,21 @@
-// service/DiskAnalysisService.java
-package com.fileorganizer.service;
+package com.fileorganizer.model;
 
-import com.fileorganizer.model.DiskStats;
-import com.fileorganizer.model.FolderStats;
 import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import java.util.List;
 
-public interface DiskAnalysisService {
+public record FolderStats(
+    Path path,
+    long bytes,
+    int fileCount,
+    List<FolderStats> children
+) {
+    public String name() {
+        return path.getFileName() != null
+            ? path.getFileName().toString()
+            : path.toString();
+    }
 
-    // 非同步掃描，onProgress 每 200 個檔案回報一次給 UI 顯示進度
-    CompletableFuture<DiskStats> analyze(Path root, Consumer<Long> onProgress);
-
-    // 資料夾樹狀結構（給 TreeMap 用）
-    CompletableFuture<FolderStats> buildFolderTree(Path root);
+    public String formattedSize() {
+        return DiskStats.humanReadable(bytes);
+    }
 }
