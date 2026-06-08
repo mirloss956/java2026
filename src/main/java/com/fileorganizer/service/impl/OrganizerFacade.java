@@ -1,5 +1,9 @@
 package com.fileorganizer.service.impl;
 
+import com.fileorganizer.model.DiskStats;
+import com.fileorganizer.model.FolderStats;
+import com.fileorganizer.service.DiskAnalysisService;
+import java.util.concurrent.CompletableFuture;
 import com.fileorganizer.config.AppConfig;
 import com.fileorganizer.controller.DuplicateActionDialog.DuplicateAction;
 import com.fileorganizer.model.*;
@@ -18,6 +22,19 @@ import java.util.function.Consumer;
 /**
  * 負責人：C
  */
+
+private final DiskAnalysisService diskAnalysisService =
+    new DiskAnalysisServiceImpl();
+
+public CompletableFuture<DiskStats> analyzeDisk(
+        Path root, Consumer<Long> onProgress) {
+    return diskAnalysisService.analyze(root, onProgress);
+}
+
+public CompletableFuture<FolderStats> buildFolderTree(Path root) {
+    return diskAnalysisService.buildFolderTree(root);
+}
+
 public class OrganizerFacade {
 
     private final FileScanService        scanService;
