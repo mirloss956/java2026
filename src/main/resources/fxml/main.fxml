@@ -77,6 +77,16 @@
                         style="-fx-background-color: #3b82f6; -fx-text-fill: white;
                                -fx-font-weight: bold; -fx-cursor: hand;"
                         text="搜尋內容" />
+
+                <Separator orientation="VERTICAL" />
+
+                <Button fx:id="btnCompareImages"
+                        mnemonicParsing="false"
+                        onAction="#handleCompareImages"
+                        prefHeight="30.0"
+                        prefWidth="130.0"
+                        style="-fx-background-color: #10b981; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"
+                        text="📸 對比相似圖片" />
             </children>
         </HBox>
 
