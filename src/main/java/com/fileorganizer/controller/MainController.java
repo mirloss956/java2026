@@ -9,16 +9,24 @@ import com.fileorganizer.util.FileSizeUtil;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.application.Platform;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class MainController {
@@ -33,14 +41,14 @@ public class MainController {
     @FXML private HBox                            scanningIndicator;
     @FXML private Label                           lblScanningHint;
 
-    // ── A 自己實作的進階功能組件（已清理重複宣告，並加入對比按鈕） ─────────────────
-    @FXML private TextField txtSearch;         // 搜尋輸入框
-    @FXML private Button btnSearch;           // 搜尋按鈕
-    @FXML private Button btnCompareImages;    // 🎯 新增的對比圖片按鈕
+    @FXML private TextField                       txtSearch;
+    @FXML private Button                          btnSearch;
+    @FXML private Button                          btnCompareImages;
 
     @FXML private Button                          btnScan;
     @FXML private Button                          btnOrganize;
     @FXML private Button                          btnUndo;
+    @FXML private Button                          btnBatchRename;   // 批次重新命名
 
     @FXML private TableColumn<FileItem, String>  colName;
     @FXML private TableColumn<FileItem, String>  colPath;
@@ -50,13 +58,12 @@ public class MainController {
 
     private Path currentDirectory;
 
-    /** 目前的操作狀態，控制按鈕 enable/disable */
     private enum AppState {
-        NO_FOLDER,      // 尚未選資料夾
-        FOLDER_SELECTED,// 已選資料夾，未掃描
-        SCANNED,        // 掃描完成，可以整理
-        ORGANIZED,      // 整理完成，可以復原
-        BUSY            // 處理中，所有按鈕 disable
+        NO_FOLDER,
+        FOLDER_SELECTED,
+        SCANNED,
+        ORGANIZED,
+        BUSY
     }
 
     private AppState appState = AppState.NO_FOLDER;
@@ -68,6 +75,7 @@ public class MainController {
 
         // ── TableView ──────────────────────────────────────────────────────────
         if (fileTable != null) {
+            fileTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
             fileTable.setItems(facade.getFileItems());
 
             if (colName != null)
@@ -157,16 +165,15 @@ public class MainController {
             dropPane.setOnMouseClicked(event -> openDirectoryChooser());
         }
 
-        if (lblStatus != null) {
-            lblStatus.appendText("[系統] 就緒。請拖曳資料夾或點擊選擇資料夾。\n");
-        }
-
-        // ── 綁定全文搜尋輸入框的 Enter 事件 ──────────────────────────────────────
+        // ── 全文搜尋 Enter 快捷 ─────────────────────────────────────────────────
         if (txtSearch != null) {
             txtSearch.setOnAction(event -> handleSearch(null));
         }
 
-        // 初始狀態
+        if (lblStatus != null) {
+            lblStatus.appendText("[系統] 就緒。請拖曳資料夾或點擊選擇資料夾。\n");
+        }
+
         setState(AppState.NO_FOLDER);
     }
 
@@ -247,27 +254,70 @@ public class MainController {
         });
     }
 
+    // ── 批次重新命名 ───────────────────────────────────────────────────────────
+
     @FXML
-    void onOpenDiskDashboard(ActionEvent event) {
-        try {
-            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
-                    getClass().getResource("/fxml/DiskDashboard.fxml"));
-            javafx.scene.Parent root = loader.load();
+    void handleBatchRename(ActionEvent event) {
+        // 有選取 → 只處理選取的項目；沒選取 → 處理全部
+        List<FileItem> selected = fileTable.getSelectionModel().getSelectedItems();
+        List<FileItem> targets = (selected == null || selected.isEmpty())
+                ? new ArrayList<>(fileTable.getItems())
+                : new ArrayList<>(selected);
 
-            javafx.stage.Stage stage = new javafx.stage.Stage();
-            stage.setTitle("磁碟空間分析");
-            stage.setScene(new javafx.scene.Scene(root, 900, 620));
-            stage.initOwner(dropPane.getScene().getWindow());
-            stage.show();
-
-        } catch (java.io.IOException e) {
+        if (targets.isEmpty()) {
             if (lblStatus != null)
-                getLblStatusAppend("[錯誤] 無法開啟磁碟分析視窗：" + e.getMessage() + "\n");
-            e.printStackTrace();
+                getLblStatusAppend("[警告] 沒有可重新命名的檔案，請先掃描。\n");
+            return;
+        }
+
+        try {
+            FXMLLoader loader = new FXMLLoader(
+                    getClass().getResource("/fxml/BatchRename.fxml"));
+            Parent root = loader.load();
+
+            BatchRenameController controller = loader.getController();
+            controller.setItems(targets);
+
+            Stage dialog = new Stage();
+            dialog.initModality(Modality.APPLICATION_MODAL);
+            dialog.initOwner(btnBatchRename.getScene().getWindow());
+            dialog.setTitle("批次重新命名");
+            dialog.setScene(new Scene(root));
+            dialog.setResizable(true);
+            dialog.showAndWait();
+
+            // 對話框關閉後刷新表格（檔名可能已改變）
+            fileTable.refresh();
+
+        } catch (IOException e) {
+            if (lblStatus != null)
+                getLblStatusAppend("[錯誤] 無法開啟批次重新命名視窗：" + e.getMessage() + "\n");
         }
     }
 
-    // ── 🎯 功能拆分一：純關鍵字內文搜尋 ──────────────────────────────────────────
+    // ── 磁碟分析 ───────────────────────────────────────────────────────────────
+
+    @FXML
+    void onOpenDiskDashboard(ActionEvent event) {
+        try {
+            FXMLLoader loader = new FXMLLoader(
+                    getClass().getResource("/fxml/DiskDashboard.fxml"));
+            Parent root = loader.load();
+
+            Stage stage = new Stage();
+            stage.setTitle("磁碟空間分析");
+            stage.setScene(new Scene(root, 900, 620));
+            stage.initOwner(dropPane.getScene().getWindow());
+            stage.show();
+
+        } catch (IOException e) {
+            if (lblStatus != null)
+                getLblStatusAppend("[錯誤] 無法開啟磁碟分析視窗：" + e.getMessage() + "\n");
+        }
+    }
+
+    // ── 全文搜尋 ───────────────────────────────────────────────────────────────
+
     @FXML
     void handleSearch(ActionEvent event) {
         if (txtSearch == null) return;
@@ -287,39 +337,42 @@ public class MainController {
         if (!folder.exists() || !folder.isDirectory()) return;
 
         if (lblStatus != null) {
-            getLblStatusAppend(String.format("\n🔍 [全文檢索] 正在搜尋「%s」內文關鍵字: \"%s\"...\n", folder.getName(), keyword));
+            getLblStatusAppend(String.format("\n🔍 [全文檢索] 正在搜尋「%s」內文關鍵字: \"%s\"...\n",
+                    folder.getName(), keyword));
         }
 
-        // 清空當前表格，只塞入文字搜尋結果
         fileTable.getItems().clear();
 
         new Thread(() -> {
             File[] files = folder.listFiles();
             if (files == null) return;
 
-            java.util.List<FileItem> matchResults = new java.util.ArrayList<>();
+            List<FileItem> matchResults = new ArrayList<>();
 
             for (File file : files) {
                 if (file.isDirectory()) continue;
                 String filename = file.getName().toLowerCase();
 
-                // 📄 僅處理文字相關檔案 (.txt, .md, .docx, .pdf)
-                if (filename.endsWith(".txt") || filename.endsWith(".md") || filename.endsWith(".docx") || filename.endsWith(".pdf")) {
+                if (filename.endsWith(".txt") || filename.endsWith(".md")
+                        || filename.endsWith(".docx") || filename.endsWith(".pdf")) {
                     String content = com.fileorganizer.util.FileTextExtractor.extractText(file);
 
                     if (content != null && content.contains(keyword)) {
                         int index = content.indexOf(keyword);
                         int start = Math.max(0, index - 15);
-                        int end = Math.min(content.length(), index + keyword.length() + 15);
+                        int end   = Math.min(content.length(), index + keyword.length() + 15);
                         String snippet = content.substring(start, end).replace("\n", " ").trim();
 
                         Platform.runLater(() -> {
                             if (lblStatus != null) {
-                                getLblStatusAppend(String.format("🎯 [內文匹配] 在《%s》內發現關鍵字！\n   👉 \"...%s...\"\n", file.getName(), snippet));
+                                getLblStatusAppend(String.format(
+                                        "🎯 [內文匹配] 在《%s》內發現關鍵字！\n   👉 \"...%s...\"\n",
+                                        file.getName(), snippet));
                             }
                         });
 
-                        FileItem matchItem = new FileItem(file.toPath(), file.length(), java.time.LocalDateTime.now());
+                        FileItem matchItem = new FileItem(
+                                file.toPath(), file.length(), java.time.LocalDateTime.now());
                         matchItem.setStatus(com.fileorganizer.model.FileStatus.PENDING);
                         matchResults.add(matchItem);
                     }
@@ -334,11 +387,13 @@ public class MainController {
         }).start();
     }
 
-    // ── 🎯 功能拆分二：獨立的圖片感知雜湊（pHash）相似度對比 ─────────────────────────
+    // ── 圖片相似度對比 ─────────────────────────────────────────────────────────
+
     @FXML
     void handleCompareImages(ActionEvent event) {
         if (currentDirectory == null) {
-            if (lblStatus != null) getLblStatusAppend("[警告] 請先選擇或拖曳一個目標資料夾，才能對比圖片！\n");
+            if (lblStatus != null)
+                getLblStatusAppend("[警告] 請先選擇或拖曳一個目標資料夾，才能對比圖片！\n");
             return;
         }
 
@@ -346,29 +401,28 @@ public class MainController {
         if (!folder.exists() || !folder.isDirectory()) return;
 
         if (lblStatus != null) {
-            getLblStatusAppend(String.format("\n📸 [pHash 圖像分析] 正在計算「%s」目錄內所有圖片的視覺特徵...\n", folder.getName()));
+            getLblStatusAppend(String.format(
+                    "\n📸 [pHash 圖像分析] 正在計算「%s」目錄內所有圖片的視覺特徵...\n",
+                    folder.getName()));
         }
 
-        // 清空表格，專注呈現相似圖片的結果
         fileTable.getItems().clear();
 
         new Thread(() -> {
             File[] files = folder.listFiles();
             if (files == null) return;
 
-            java.util.List<FileItem> matchResults = new java.util.ArrayList<>();
-            java.util.List<File> imageFiles = new java.util.ArrayList<>();
+            List<FileItem> matchResults = new ArrayList<>();
+            List<File> imageFiles = new ArrayList<>();
 
-            // 僅收集圖片格式檔案
             for (File file : files) {
                 if (file.isDirectory()) continue;
-                String filename = file.getName().toLowerCase();
-                if (filename.endsWith(".jpg") || filename.endsWith(".jpeg") || filename.endsWith(".png")) {
+                String fn = file.getName().toLowerCase();
+                if (fn.endsWith(".jpg") || fn.endsWith(".jpeg") || fn.endsWith(".png")) {
                     imageFiles.add(file);
                 }
             }
 
-            // 開始進行雙重比對
             if (imageFiles.size() > 1) {
                 for (int i = 0; i < imageFiles.size(); i++) {
                     for (int j = i + 1; j < imageFiles.size(); j++) {
@@ -377,19 +431,21 @@ public class MainController {
 
                         String hashA = com.fileorganizer.util.ImagePHash.getPHash(imgA);
                         String hashB = com.fileorganizer.util.ImagePHash.getPHash(imgB);
-
                         double similarity = com.fileorganizer.util.ImagePHash.calculateSimilarity(hashA, hashB);
 
-                        // 相似度大於 85% 判定為高度相似圖片
                         if (similarity >= 0.85) {
                             Platform.runLater(() -> {
                                 if (lblStatus != null) {
-                                    getLblStatusAppend(String.format("⚠️ [圖片相似] 偵測到高度相似圖片！\n   🖼️ 圖片A: %s\n   🖼️ 圖片B: %s\n   📈 pHash 相似度: %.1f%%\n",
+                                    getLblStatusAppend(String.format(
+                                            "⚠️ [圖片相似] 偵測到高度相似圖片！\n" +
+                                            "   🖼️ 圖片A: %s\n   🖼️ 圖片B: %s\n" +
+                                            "   📈 pHash 相似度: %.1f%%\n",
                                             imgA.getName(), imgB.getName(), similarity * 100));
                                 }
                             });
 
-                            FileItem dupImg = new FileItem(imgB.toPath(), imgB.length(), java.time.LocalDateTime.now());
+                            FileItem dupImg = new FileItem(
+                                    imgB.toPath(), imgB.length(), java.time.LocalDateTime.now());
                             dupImg.setStatus(com.fileorganizer.model.FileStatus.DUPLICATE);
                             if (!matchResults.contains(dupImg)) {
                                 matchResults.add(dupImg);
@@ -399,11 +455,11 @@ public class MainController {
                 }
             } else {
                 Platform.runLater(() -> {
-                    if (lblStatus != null) getLblStatusAppend("[提示] 目錄內圖片數量小於 2 張，無法進行相似度對比。\n");
+                    if (lblStatus != null)
+                        getLblStatusAppend("[提示] 目錄內圖片數量小於 2 張，無法進行相似度對比。\n");
                 });
             }
 
-            // 刷新結果回 UI
             Platform.runLater(() -> {
                 fileTable.getItems().addAll(matchResults);
                 if (lblStatus != null) getLblStatusAppend("[完成] 相似圖片感知雜湊對比結束。\n");
@@ -412,11 +468,11 @@ public class MainController {
         }).start();
     }
 
+    // ── 私有工具 ──────────────────────────────────────────────────────────────
+
     private void getLblStatusAppend(String x) {
         lblStatus.appendText(x);
     }
-
-    // ── 私有工具 ──────────────────────────────────────────────────────────────
 
     private void openDirectoryChooser() {
         DirectoryChooser chooser = new DirectoryChooser();
@@ -476,5 +532,10 @@ public class MainController {
 
         if (btnUndo != null)
             btnUndo.setDisable(isBusy || state != AppState.ORGANIZED);
+
+        // 掃描完成或整理完成後才可重新命名
+        if (btnBatchRename != null)
+            btnBatchRename.setDisable(isBusy
+                    || (state != AppState.SCANNED && state != AppState.ORGANIZED));
     }
 }
