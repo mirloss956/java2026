@@ -13,6 +13,7 @@
     </padding>
     <children>
 
+        <!-- 主操作列 -->
         <HBox alignment="CENTER_LEFT" spacing="15.0" styleClass="section-box">
             <children>
                 <Label style="-fx-font-weight: bold;" text="操作：" />
@@ -55,9 +56,19 @@
                         onAction="#handleUndo"
                         styleClass="button-secondary"
                         text="↩ 復原上一次操作" />
+
+                <Button fx:id="btnBatchRename"
+                        mnemonicParsing="false"
+                        onAction="#handleBatchRename"
+                        disable="true"
+                        style="-fx-background-color: #7c3aed; -fx-text-fill: white;
+                               -fx-font-weight: bold; -fx-background-radius: 5px;
+                               -fx-cursor: hand;"
+                        text="✏ 批次重新命名" />
             </children>
         </HBox>
 
+        <!-- 全文搜尋 + 圖片對比列 -->
         <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="section-box"
               style="-fx-background-color: #f8fafc; -fx-padding: 8px;
                      -fx-background-radius: 5px; -fx-border-color: #e2e8f0;
@@ -85,11 +96,13 @@
                         onAction="#handleCompareImages"
                         prefHeight="30.0"
                         prefWidth="130.0"
-                        style="-fx-background-color: #10b981; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"
+                        style="-fx-background-color: #10b981; -fx-text-fill: white;
+                               -fx-font-weight: bold; -fx-cursor: hand;"
                         text="📸 對比相似圖片" />
             </children>
         </HBox>
 
+        <!-- 拖曳區 -->
         <VBox fx:id="dropPane"
               alignment="CENTER"
               onDragDropped="#handleDragDropped"
@@ -113,6 +126,7 @@
             </children>
         </VBox>
 
+        <!-- 主內容 SplitPane -->
         <SplitPane dividerPositions="0.35" VBox.vgrow="ALWAYS">
             <items>
 

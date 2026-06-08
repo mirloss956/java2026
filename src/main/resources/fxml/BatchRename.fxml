@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox prefWidth="780.0" prefHeight="560.0" spacing="10.0"
+      xmlns="http://javafx.com/javafx/17"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.fileorganizer.controller.BatchRenameController">
+    <padding>
+        <Insets top="15.0" right="15.0" bottom="15.0" left="15.0"/>
+    </padding>
+    <children>
+
+        <!-- 標題 -->
+        <Label text="✏ 批次重新命名"
+               style="-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #1e293b;"/>
+
+        <!-- 規則設定 Tabs -->
+        <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE" prefHeight="174.0" minHeight="174.0">
+            <tabs>
+
+                <!-- Tab 0：文字取代 -->
+                <Tab text="文字取代">
+                    <content>
+                        <GridPane hgap="12.0" vgap="10.0"
+                                  style="-fx-padding: 14px;">
+                            <columnConstraints>
+                                <ColumnConstraints minWidth="100.0" />
+                                <ColumnConstraints hgrow="ALWAYS" />
+                                <ColumnConstraints minWidth="140.0" />
+                            </columnConstraints>
+                            <rowConstraints>
+                                <RowConstraints minHeight="32.0"/>
+                                <RowConstraints minHeight="32.0"/>
+                                <RowConstraints minHeight="32.0"/>
+                            </rowConstraints>
+
+                            <Label text="尋找："        GridPane.rowIndex="0" GridPane.columnIndex="0" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <TextField fx:id="txtFind"   GridPane.rowIndex="0" GridPane.columnIndex="1"
+                                       promptText="輸入要尋找的文字或正規表達式"/>
+                            <CheckBox fx:id="chkRegex"  GridPane.rowIndex="0" GridPane.columnIndex="2"
+                                      text="使用正規表達式 (Regex)"/>
+
+                            <Label text="取代為："       GridPane.rowIndex="1" GridPane.columnIndex="0" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <TextField fx:id="txtReplace" GridPane.rowIndex="1" GridPane.columnIndex="1"
+                                       promptText="取代後的文字（留空則刪除）"/>
+                            <CheckBox fx:id="chkCaseSensitive" GridPane.rowIndex="1" GridPane.columnIndex="2"
+                                      text="區分大小寫"/>
+
+                            <Label text="提示：" GridPane.rowIndex="2" GridPane.columnIndex="0" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <Label text="Regex 範例：把 IMG_(\d+) 取代為 photo_$1，可將 IMG_0042 改為 photo_0042"
+                                   GridPane.rowIndex="2" GridPane.columnIndex="1" GridPane.columnSpan="2"
+                                   style="-fx-text-fill: #64748b; -fx-font-size: 11px;"/>
+                        </GridPane>
+                    </content>
+                </Tab>
+
+                <!-- Tab 1：序號 -->
+                <Tab text="序號附加">
+                    <content>
+                        <GridPane hgap="12.0" vgap="10.0"
+                                  style="-fx-padding: 14px;">
+                            <columnConstraints>
+                                <ColumnConstraints minWidth="100.0"/>
+                                <ColumnConstraints hgrow="ALWAYS"/>
+                                <ColumnConstraints minWidth="100.0"/>
+                                <ColumnConstraints hgrow="ALWAYS"/>
+                            </columnConstraints>
+                            <rowConstraints>
+                                <RowConstraints minHeight="32.0"/>
+                                <RowConstraints minHeight="32.0"/>
+                                <RowConstraints minHeight="32.0"/>
+                            </rowConstraints>
+
+                            <Label text="前綴："       GridPane.rowIndex="0" GridPane.columnIndex="0" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <TextField fx:id="txtPrefix" GridPane.rowIndex="0" GridPane.columnIndex="1"
+                                       promptText="例：photo_"/>
+
+                            <Label text="後綴："       GridPane.rowIndex="0" GridPane.columnIndex="2" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <TextField fx:id="txtSuffix" GridPane.rowIndex="0" GridPane.columnIndex="3"
+                                       promptText="例：_final"/>
+
+                            <Label text="起始序號："   GridPane.rowIndex="1" GridPane.columnIndex="0" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <Spinner fx:id="spinStart" GridPane.rowIndex="1" GridPane.columnIndex="1"
+                                     prefWidth="90.0" editable="true"/>
+
+                            <Label text="間隔："       GridPane.rowIndex="1" GridPane.columnIndex="2" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <Spinner fx:id="spinStep"  GridPane.rowIndex="1" GridPane.columnIndex="3"
+                                     prefWidth="90.0" editable="true"/>
+
+                            <Label text="補零位數："   GridPane.rowIndex="2" GridPane.columnIndex="0" style="-fx-alignment: CENTER_RIGHT;"/>
+                            <Spinner fx:id="spinPadding" GridPane.rowIndex="2" GridPane.columnIndex="1"
+                                     prefWidth="90.0" editable="true"/>
+
+                            <CheckBox fx:id="chkKeepOriginal" GridPane.rowIndex="2" GridPane.columnIndex="2"
+                                      GridPane.columnSpan="2"
+                                      text="保留原始檔名（插入序號前方）"
+                                      selected="true"/>
+                        </GridPane>
+                    </content>
+                </Tab>
+
+                <!-- Tab 2：大小寫 -->
+                <Tab text="大小寫轉換">
+                    <content>
+                        <HBox spacing="20.0" style="-fx-padding: 14px 14px 8px 14px;" alignment="CENTER_LEFT">
+                            <RadioButton fx:id="radKeepCase"  text="保持不變（預設）" selected="true">
+                                <toggleGroup><ToggleGroup fx:id="caseGroup"/></toggleGroup>
+                            </RadioButton>
+                            <RadioButton fx:id="radUppercase" text="全部大寫 (UPPERCASE)">
+                                <toggleGroup><fx:reference source="caseGroup"/></toggleGroup>
+                            </RadioButton>
+                            <RadioButton fx:id="radLowercase" text="全部小寫 (lowercase)">
+                                <toggleGroup><fx:reference source="caseGroup"/></toggleGroup>
+                            </RadioButton>
+                            <RadioButton fx:id="radTitleCase" text="首字大寫 (Title Case)">
+                                <toggleGroup><fx:reference source="caseGroup"/></toggleGroup>
+                            </RadioButton>
+                        </HBox>
+                    </content>
+                </Tab>
+
+            </tabs>
+        </TabPane>
+
+        <!-- 預覽表格 -->
+        <Label text="預覽結果："
+               style="-fx-font-weight: bold; -fx-text-fill: #334155;"/>
+
+        <TableView fx:id="previewTable" VBox.vgrow="ALWAYS">
+            <columns>
+                <TableColumn fx:id="colOriginal" text="原始檔名"  prefWidth="270.0"/>
+                <TableColumn fx:id="colPreview"  text="更名後"    prefWidth="270.0"/>
+                <TableColumn fx:id="colStatus"   text="狀態"      prefWidth="120.0"/>
+            </columns>
+            <placeholder>
+                <Label text="尚未載入任何檔案"/>
+            </placeholder>
+        </TableView>
+
+        <!-- 摘要 + 按鈕 -->
+        <HBox alignment="CENTER_LEFT" spacing="12.0">
+            <Label fx:id="lblSummary"
+                   text="—"
+                   HBox.hgrow="ALWAYS"
+                   style="-fx-text-fill: #475569; -fx-font-size: 12px;"/>
+            <Button fx:id="btnApply"
+                    text="✅ 確認執行"
+                    onAction="#handleApply"
+                    disable="true"
+                    style="-fx-background-color: #2563eb; -fx-text-fill: white;
+                           -fx-font-weight: bold; -fx-background-radius: 5px;
+                           -fx-cursor: hand; -fx-padding: 6 18 6 18;"/>
+            <Button fx:id="btnCancel"
+                    text="取消"
+                    onAction="#handleCancel"
+                    style="-fx-background-color: #6b7280; -fx-text-fill: white;
+                           -fx-background-radius: 5px; -fx-cursor: hand;
+                           -fx-padding: 6 18 6 18;"/>
+        </HBox>
+
+    </children>
+</VBox>
