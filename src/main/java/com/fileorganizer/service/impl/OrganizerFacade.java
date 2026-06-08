@@ -1,14 +1,13 @@
 package com.fileorganizer.service.impl;
 
-import com.fileorganizer.model.DiskStats;
-import com.fileorganizer.model.FolderStats;
-import com.fileorganizer.service.DiskAnalysisService;
-import java.util.concurrent.CompletableFuture;
 import com.fileorganizer.config.AppConfig;
 import com.fileorganizer.controller.DuplicateActionDialog.DuplicateAction;
 import com.fileorganizer.model.*;
+import com.fileorganizer.model.DiskStats;
+import com.fileorganizer.model.FolderStats;
 import com.fileorganizer.rule.RuleEngine;
 import com.fileorganizer.service.*;
+import com.fileorganizer.service.DiskAnalysisService;
 import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.collections.*;
@@ -17,23 +16,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-
-/**
- * 負責人：C
- */
-
-private final DiskAnalysisService diskAnalysisService =
-    new DiskAnalysisServiceImpl();
-
-public CompletableFuture<DiskStats> analyzeDisk(
-        Path root, Consumer<Long> onProgress) {
-    return diskAnalysisService.analyze(root, onProgress);
-}
-
-public CompletableFuture<FolderStats> buildFolderTree(Path root) {
-    return diskAnalysisService.buildFolderTree(root);
-}
 
 public class OrganizerFacade {
 
@@ -51,6 +35,10 @@ public class OrganizerFacade {
     private final BooleanProperty          busy          = new SimpleBooleanProperty(false);
     private final StringProperty           statusMessage = new SimpleStringProperty("就緒");
 
+    // ── 磁碟分析 ──────────────────────────────────────────────
+    private final DiskAnalysisService diskAnalysisService =
+        new DiskAnalysisServiceImpl();
+
     public OrganizerFacade(
             FileScanService scanService,
             FileMoveService moveService,
@@ -66,6 +54,15 @@ public class OrganizerFacade {
         this.watchService     = watchService;
         this.ruleEngine       = ruleEngine;
         this.config           = config;
+    }
+
+    public CompletableFuture<DiskStats> analyzeDisk(
+            Path root, Consumer<Long> onProgress) {
+        return diskAnalysisService.analyze(root, onProgress);
+    }
+
+    public CompletableFuture<FolderStats> buildFolderTree(Path root) {
+        return diskAnalysisService.buildFolderTree(root);
     }
 
     public void setRuleEngine(RuleEngine ruleEngine) {
@@ -143,13 +140,6 @@ public class OrganizerFacade {
         });
     }
 
-    /**
-     * 重複檔案整組處理（兩個以上都算）。
-     *
-     * ISOLATE_IN_CATEGORY：整組移到「對應分類/重複檔案/」
-     * ISOLATE_ALL：整組移到根目錄「重複檔案/」
-     * DELETE_ALL：整組都刪（dryRun 時標 SKIPPED 不實際刪）
-     */
     private void applyDuplicateAction(List<FileItem> items, DuplicateAction action,
                                       Path targetDir, boolean dryRun) {
         for (FileItem item : items) {
@@ -157,10 +147,9 @@ public class OrganizerFacade {
 
             switch (action) {
                 case ISOLATE_IN_CATEGORY -> {
-                    // 取原本 destinationPath 的上一層（分類資料夾）加 重複檔案/
                     Path dest = item.getDestinationPath();
                     if (dest != null) {
-                        Path categoryDir = dest.getParent(); // 例如 test/圖片
+                        Path categoryDir = dest.getParent();
                         item.setDestinationPath(
                             categoryDir.resolve("重複檔案").resolve(item.getFileName()));
                     }
