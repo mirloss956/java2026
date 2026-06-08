@@ -32,39 +32,50 @@
 
                 <Separator orientation="VERTICAL" />
 
+                <Button fx:id="btnScan"
+                        mnemonicParsing="false"
+                        onAction="#handleScan"
+                        styleClass="button-secondary"
+                        text="🔍 掃描" />
+
                 <Button mnemonicParsing="false"
                         onAction="#onOpenDiskDashboard"
                         text="磁碟分析" />
 
                 <Region HBox.hgrow="ALWAYS" />
 
-                <Button mnemonicParsing="false"
+                <Button fx:id="btnOrganize"
+                        mnemonicParsing="false"
                         onAction="#handleOrganize"
                         styleClass="button-primary"
                         text="▶ 開始整理" />
 
-                <Button mnemonicParsing="false"
+                <Button fx:id="btnUndo"
+                        mnemonicParsing="false"
                         onAction="#handleUndo"
                         styleClass="button-secondary"
                         text="↩ 復原上一次操作" />
             </children>
         </HBox>
 
-        <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="section-box" style="-fx-background-color: #f8fafc; -fx-padding: 8px; -fx-background-radius: 5px; -fx-border-color: #e2e8f0; -fx-border-radius: 5px;">
+        <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="section-box"
+              style="-fx-background-color: #f8fafc; -fx-padding: 8px;
+                     -fx-background-radius: 5px; -fx-border-color: #e2e8f0;
+                     -fx-border-radius: 5px;">
             <children>
-                <Label style="-fx-font-weight: bold; -fx-text-fill: #475569;" text="🔍 全文深度檢索：" />
-
+                <Label style="-fx-font-weight: bold; -fx-text-fill: #475569;"
+                       text="🔍 全文深度檢索：" />
                 <TextField fx:id="txtSearch"
                            HBox.hgrow="ALWAYS"
                            prefHeight="30.0"
-                           promptText="輸入關鍵字以檢索 .txt / .md / .docx / .pdf 內文段落，或自動比對目錄內相似圖片 (pHash)..." />
-
+                           promptText="輸入關鍵字以檢索 .txt / .md / .docx / .pdf 內文段落..." />
                 <Button fx:id="btnSearch"
                         mnemonicParsing="false"
                         onAction="#handleSearch"
                         prefHeight="30.0"
                         prefWidth="100.0"
-                        style="-fx-background-color: #3b82f6; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"
+                        style="-fx-background-color: #3b82f6; -fx-text-fill: white;
+                               -fx-font-weight: bold; -fx-cursor: hand;"
                         text="搜尋內容" />
             </children>
         </HBox>
@@ -77,8 +88,18 @@
               styleClass="drop-shadow-pane"
               VBox.vgrow="NEVER">
             <children>
-                <Label style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;"
+                <Label fx:id="lblDropHint"
+                       style="-fx-font-size: 16px; -fx-text-fill: #7f8c8d;"
                        text="📂 將要整理的資料夾拖曳至此處，或點擊選擇資料夾" />
+                <HBox fx:id="scanningIndicator" alignment="CENTER" spacing="8.0"
+                      managed="false" visible="false">
+                    <children>
+                        <ProgressIndicator prefWidth="24.0" prefHeight="24.0" />
+                        <Label fx:id="lblScanningHint"
+                               style="-fx-font-size: 14px; -fx-text-fill: #3498db;"
+                               text="處理中，請稍候..." />
+                    </children>
+                </HBox>
             </children>
         </VBox>
 
@@ -100,10 +121,11 @@
                         <Label style="-fx-font-weight: bold;" text="檔案處理清單：" />
                         <TableView fx:id="fileTable" VBox.vgrow="ALWAYS">
                             <columns>
-                                <TableColumn fx:id="colName"   prefWidth="180.0" text="檔案名稱" />
-                                <TableColumn fx:id="colPath"   prefWidth="240.0" text="原始路徑" />
-                                <TableColumn fx:id="colSize"   prefWidth="90.0"  text="大小" />
-                                <TableColumn fx:id="colStatus" prefWidth="100.0" text="狀態" />
+                                <TableColumn fx:id="colName"   prefWidth="160.0" text="檔案名稱" />
+                                <TableColumn fx:id="colPath"   prefWidth="200.0" text="原始路徑" />
+                                <TableColumn fx:id="colSize"   prefWidth="80.0"  text="大小" />
+                                <TableColumn fx:id="colStatus" prefWidth="90.0"  text="狀態" />
+                                <TableColumn fx:id="colDest"   prefWidth="160.0" text="目的地" />
                             </columns>
                             <placeholder>
                                 <Label text="尚未掃描任何檔案" />
