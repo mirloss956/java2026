@@ -239,6 +239,26 @@ public class MainController {
         });
     }
 
+    @FXML
+    void onOpenDiskDashboard(ActionEvent event) {
+        try {
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
+                getClass().getResource("/fxml/DiskDashboard.fxml"));
+            javafx.scene.Parent root = loader.load();
+
+            javafx.stage.Stage stage = new javafx.stage.Stage();
+            stage.setTitle("磁碟空間分析");
+            stage.setScene(new javafx.scene.Scene(root, 900, 620));
+            stage.initOwner(dropPane.getScene().getWindow());
+            stage.show();
+
+        } catch (java.io.IOException e) {
+            if (lblStatus != null)
+                lblStatus.appendText("[錯誤] 無法開啟磁碟分析視窗：" + e.getMessage() + "\n");
+            e.printStackTrace();
+        }
+    }
+
     // ── 私有工具 ──────────────────────────────────────────────────────────────
 
     private void openDirectoryChooser() {
