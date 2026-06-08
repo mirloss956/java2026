@@ -32,6 +32,10 @@ public class MainController {
     @FXML private HBox                            scanningIndicator;
     @FXML private Label                           lblScanningHint;
 
+    @FXML private Button                          btnScan;
+    @FXML private Button                          btnOrganize;
+    @FXML private Button                          btnUndo;
+
     @FXML private TableColumn<FileItem, String>  colName;
     @FXML private TableColumn<FileItem, String>  colPath;
     @FXML private TableColumn<FileItem, String>  colSize;
@@ -39,6 +43,17 @@ public class MainController {
     @FXML private TableColumn<FileItem, String>  colDest;
 
     private Path currentDirectory;
+
+    /** 目前的操作狀態，控制按鈕 enable/disable */
+    private enum AppState {
+        NO_FOLDER,      // 尚未選資料夾
+        FOLDER_SELECTED,// 已選資料夾，未掃描
+        SCANNED,        // 掃描完成，可以整理
+        ORGANIZED,      // 整理完成，可以復原
+        BUSY            // 處理中，所有按鈕 disable
+    }
+
+    private AppState appState = AppState.NO_FOLDER;
 
     @FXML
     public void initialize() {
@@ -84,7 +99,7 @@ public class MainController {
             });
         }
 
-        // ── 狀態列 + busy 連動 loading 提示 ────────────────────────────────────
+        // ── 狀態列 ──────────────────────────────────────────────────────────────
         if (lblStatus != null) {
             facade.statusMessageProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null && !newVal.isBlank()) {
@@ -93,7 +108,7 @@ public class MainController {
             });
         }
 
-        // busy 時顯示 loading 指示器，並更新提示文字
+        // ── busy 連動 loading 指示器 ────────────────────────────────────────────
         facade.busyProperty().addListener((obs, wasBusy, isNowBusy) -> {
             if (scanningIndicator != null) {
                 scanningIndicator.setVisible(isNowBusy);
@@ -103,7 +118,6 @@ public class MainController {
                 if (isNowBusy) {
                     lblDropHint.setVisible(false);
                     lblDropHint.setManaged(false);
-                    // 把目前的狀態訊息顯示在 loading 文字上
                     String msg = facade.statusMessageProperty().get();
                     lblScanningHint.setText(msg != null ? msg : "處理中，請稍候...");
                 } else {
@@ -111,6 +125,7 @@ public class MainController {
                     lblDropHint.setManaged(true);
                 }
             }
+            if (isNowBusy) setState(AppState.BUSY);
         });
 
         // ── 即時監控 CheckBox ───────────────────────────────────────────────────
@@ -139,6 +154,9 @@ public class MainController {
         if (lblStatus != null) {
             lblStatus.appendText("[系統] 就緒。請拖曳資料夾或點擊選擇資料夾。\n");
         }
+
+        // 初始狀態
+        setState(AppState.NO_FOLDER);
     }
 
     // ── 拖曳事件 ──────────────────────────────────────────────────────────────
@@ -200,12 +218,25 @@ public class MainController {
             return;
         }
 
-        AppContext.get().getFacade().organizeAsync(dryRun, actionOpt.get(), result -> {});
+        AppContext.get().getFacade().organizeAsync(dryRun, actionOpt.get(), result -> {
+            // 預覽模式完成後回到 SCANNED，讓使用者可以繼續按整理
+            // 真正整理完成後進入 ORGANIZED，需要重新掃描才能再整理
+            if (dryRun) {
+                setState(AppState.SCANNED);
+            } else {
+                setState(AppState.ORGANIZED);
+            }
+        });
     }
 
     @FXML
     void handleUndo(ActionEvent event) {
-        AppContext.get().getFacade().undoAsync(null);
+        AppContext.get().getFacade().undoAsync(() -> {
+            // 復原完成後回到 FOLDER_SELECTED，強制重新掃描
+            setState(AppState.FOLDER_SELECTED);
+            if (lblStatus != null)
+                lblStatus.appendText("[系統] 請重新掃描以確認復原結果。\n");
+        });
     }
 
     // ── 私有工具 ──────────────────────────────────────────────────────────────
@@ -229,6 +260,8 @@ public class MainController {
         if (lblStatus != null)
             lblStatus.appendText("[系統] 已選擇資料夾：" + directory.toAbsolutePath()
                 + "，請調整掃描深度後按「掃描」。\n");
+
+        setState(AppState.FOLDER_SELECTED);
     }
 
     private void triggerScan(Path directory) {
@@ -241,11 +274,30 @@ public class MainController {
         if (wasWatching) facade.stopWatch();
 
         facade.scanAsync(directory, count -> {
+            setState(AppState.SCANNED);
             if (wasWatching || (toggleWatch != null && toggleWatch.isSelected())) {
                 facade.startWatch(directory);
                 if (toggleWatch != null && !toggleWatch.isSelected())
                     toggleWatch.setSelected(true);
             }
         });
+    }
+
+    /**
+     * 依狀態控制按鈕 enable/disable。
+     */
+    private void setState(AppState state) {
+        appState = state;
+
+        boolean isBusy = (state == AppState.BUSY);
+
+        if (btnScan != null)
+            btnScan.setDisable(isBusy || currentDirectory == null);
+
+        if (btnOrganize != null)
+            btnOrganize.setDisable(isBusy || state != AppState.SCANNED);
+
+        if (btnUndo != null)
+            btnUndo.setDisable(isBusy || state != AppState.ORGANIZED);
     }
 }
