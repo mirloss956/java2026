@@ -6,6 +6,7 @@ import com.fileorganizer.model.FileItem;
 import com.fileorganizer.service.impl.AppContext;
 import com.fileorganizer.service.impl.OrganizerFacade;
 import com.fileorganizer.util.FileSizeUtil;
+import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.event.ActionEvent;
@@ -15,6 +16,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.TransferMode;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
@@ -33,7 +35,7 @@ import java.util.Optional;
  * 操作流程：
  *   1. 拖曳資料夾（或點擊選擇）→ 只記錄路徑，提示使用者調整掃描深度
  *   2. 調整 Spinner 掃描深度
- *   3. 按「掃描」鍵 → 才開始實際掃描
+ *   3. 按「掃描」鍵 → 才開始實際掃描，並顯示 loading 動畫
  */
 public class MainController {
 
@@ -43,6 +45,8 @@ public class MainController {
     @FXML private CheckBox                        toggleWatch;
     @FXML private VBox                            dropPane;
     @FXML private Label                           lblDropHint;
+    @FXML private HBox                            scanningIndicator;   // ← loading HBox
+    @FXML private Label                           lblScanningHint;     // ← loading 文字
     @FXML private Spinner<Integer>                spinnerDepth;
     @FXML private Button                          btnScan;
     @FXML private Button                          btnBatchRename;
@@ -85,9 +89,11 @@ public class MainController {
         }
 
         // ── 掃描按鈕：初始灰掉，選到資料夾後才啟用 ──────────────────────
-        if (btnScan != null) {
+        if (btnScan != null)
             btnScan.setDisable(true);
-        }
+
+        // ── loading 動畫：初始隱藏 ────────────────────────────────────────
+        setScanningIndicator(false, null);
 
         // ── 掃描深度 Spinner ──────────────────────────────────────────────
         if (spinnerDepth != null) {
@@ -153,7 +159,7 @@ public class MainController {
         if (event.getDragboard().hasFiles()) {
             File file = event.getDragboard().getFiles().get(0);
             if (file.isDirectory()) {
-                // ★ 只記錄路徑、更新提示，不掃描
+                // ★ 只記錄路徑，不掃描
                 setSelectedDirectory(file.toPath());
                 success = true;
             } else {
@@ -284,16 +290,13 @@ public class MainController {
     // 私有工具
     // =========================================================
 
-    /**
-     * 開啟資料夾選擇器，選好後只記錄路徑，不掃描。
-     */
+    /** 開啟資料夾選擇器，選好後只記錄路徑，不掃描。 */
     private void openDirectoryChooser() {
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("選擇要整理的資料夾");
         File selectedDir = chooser.showDialog(dropPane.getScene().getWindow());
-        if (selectedDir != null) {
+        if (selectedDir != null)
             setSelectedDirectory(selectedDir.toPath());
-        }
     }
 
     /**
@@ -303,12 +306,10 @@ public class MainController {
     private void setSelectedDirectory(Path directory) {
         currentDirectory = directory;
 
-        // 更新拖曳區提示文字
         if (lblDropHint != null)
             lblDropHint.setText("📂 已選擇：" + directory.toAbsolutePath()
                 + "　← 確認掃描深度後，按「🔍 掃描」開始");
 
-        // 啟用掃描按鈕
         if (btnScan != null)
             btnScan.setDisable(false);
 
@@ -319,6 +320,7 @@ public class MainController {
 
     /**
      * 實際執行掃描（只有按下掃描鍵才呼叫）。
+     * 掃描開始時顯示 loading，完成後隱藏。
      */
     private void executeScan(Path directory) {
         OrganizerFacade facade = AppContext.get().getFacade();
@@ -329,12 +331,40 @@ public class MainController {
         boolean wasWatching = facade.isWatching();
         if (wasWatching) facade.stopWatch();
 
+        // ── 掃描開始：顯示 loading、禁用按鈕 ────────────────────────────
+        if (btnScan != null) btnScan.setDisable(true);
+        setScanningIndicator(true, "掃描中（深度 " + config.getScanDepth() + " 層），請稍候...");
+
         facade.scanAsync(directory, count -> {
+            // ── 掃描結束：回 UI 執行緒收起 loading、恢復按鈕 ────────────
+            Platform.runLater(() -> {
+                setScanningIndicator(false, null);
+                if (btnScan != null) btnScan.setDisable(false);
+            });
+
             if (wasWatching || (toggleWatch != null && toggleWatch.isSelected())) {
                 facade.startWatch(directory);
                 if (toggleWatch != null && !toggleWatch.isSelected())
-                    toggleWatch.setSelected(true);
+                    Platform.runLater(() -> toggleWatch.setSelected(true));
             }
         });
+    }
+
+    /**
+     * 控制拖曳區的 loading 動畫顯示／隱藏。
+     *
+     * @param show    true = 顯示，false = 隱藏
+     * @param message 顯示時的文字；null 則維持 FXML 預設文字
+     */
+    private void setScanningIndicator(boolean show, String message) {
+        if (scanningIndicator != null) {
+            scanningIndicator.setVisible(show);
+            scanningIndicator.setManaged(show);
+        }
+        if (lblDropHint != null)
+            lblDropHint.setVisible(!show);   // 掃描中隱藏原提示，避免兩行擠在一起
+
+        if (show && message != null && lblScanningHint != null)
+            lblScanningHint.setText(message);
     }
 }
