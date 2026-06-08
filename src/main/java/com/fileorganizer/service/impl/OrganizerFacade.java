@@ -1,19 +1,13 @@
 package com.fileorganizer.service.impl;
 
 import com.fileorganizer.config.AppConfig;
-import com.fileorganizer.controller.DuplicateActionDialog.DuplicateAction;
 import com.fileorganizer.model.*;
-import com.fileorganizer.model.DiskStats;
-import com.fileorganizer.model.FolderStats;
 import com.fileorganizer.rule.RuleEngine;
 import com.fileorganizer.service.*;
-import com.fileorganizer.service.DiskAnalysisService;
 import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.collections.*;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -29,13 +23,12 @@ public class OrganizerFacade {
     private final AppConfig              config;
 
     private volatile RuleEngine ruleEngine;
-    private volatile Path lastScannedDirectory;
 
     private final ObservableList<FileItem> fileItems     = FXCollections.observableArrayList();
     private final BooleanProperty          busy          = new SimpleBooleanProperty(false);
     private final StringProperty           statusMessage = new SimpleStringProperty("就緒");
 
-    // ── 磁碟分析 ──────────────────────────────────────────────
+    // ── 新增：磁碟分析 ────────────────────────────────────────
     private final DiskAnalysisService diskAnalysisService =
         new DiskAnalysisServiceImpl();
 
@@ -65,6 +58,10 @@ public class OrganizerFacade {
         return diskAnalysisService.buildFolderTree(root);
     }
 
+    // =========================================================
+    // 執行期熱替換規則引擎
+    // =========================================================
+
     public void setRuleEngine(RuleEngine ruleEngine) {
         this.ruleEngine = ruleEngine;
     }
@@ -75,8 +72,7 @@ public class OrganizerFacade {
 
     public void scanAsync(Path directory, Consumer<Integer> onDone) {
         int depth = config.getScanDepth();
-        lastScannedDirectory = directory;
-        setBusy(true, "[系統] 掃描中（深度 " + depth + " 層）：" + directory.getFileName());
+        setBusy(true, "掃描中（深度 " + depth + " 層）：" + directory.getFileName());
 
         Thread.ofVirtual().start(() -> {
             try {
@@ -86,21 +82,15 @@ public class OrganizerFacade {
                     duplicateService.detectDuplicates(result);
                 }
 
-                RuleEngine localEngine = new RuleEngine(ruleEngine.getRules(), directory);
-                localEngine.applyAll(result);
+                ruleEngine.applyAll(result);
 
                 Platform.runLater(() -> {
                     fileItems.setAll(result);
-                    int dupCount = (int) result.stream()
-                            .filter(f -> f.getStatus() == FileStatus.DUPLICATE).count();
-                    String msg = "[系統] 掃描完成（深度 " + depth + " 層），共 "
-                            + result.size() + " 個檔案";
-                    if (dupCount > 0) msg += "，其中 " + dupCount + " 個重複";
-                    setBusy(false, msg);
+                    setBusy(false, "掃描完成（深度 " + depth + " 層），共 " + result.size() + " 個檔案");
                     if (onDone != null) onDone.accept(result.size());
                 });
             } catch (Exception e) {
-                Platform.runLater(() -> setBusy(false, "[錯誤] 掃描失敗：" + e.getMessage()));
+                Platform.runLater(() -> setBusy(false, "掃描失敗：" + e.getMessage()));
             }
         });
     }
@@ -109,20 +99,17 @@ public class OrganizerFacade {
     // 整理
     // =========================================================
 
-    public void organizeAsync(boolean dryRun, DuplicateAction duplicateAction,
-                              Consumer<OrganizeResult> onDone) {
+    public void organizeAsync(boolean dryRun, Consumer<OrganizeResult> onDone) {
         if (fileItems.isEmpty()) {
-            setStatus("[錯誤] 請先掃描資料夾");
+            setStatus("請先掃描資料夾");
             return;
         }
-        setBusy(true, dryRun ? "[系統] 預覽中，計算整理結果..." : "[系統] 整理中，搬移檔案...");
+        setBusy(true, dryRun ? "預覽中..." : "整理中...");
 
         List<FileItem> snapshot = List.copyOf(fileItems);
-        Path targetDir = lastScannedDirectory;
 
         Thread.ofVirtual().start(() -> {
             try {
-                applyDuplicateAction(snapshot, duplicateAction, targetDir, dryRun);
                 OrganizeResult result = moveService.move(snapshot, dryRun);
 
                 if (!dryRun) {
@@ -135,46 +122,9 @@ public class OrganizerFacade {
                     if (onDone != null) onDone.accept(result);
                 });
             } catch (Exception e) {
-                Platform.runLater(() -> setBusy(false, "[錯誤] 整理失敗：" + e.getMessage()));
+                Platform.runLater(() -> setBusy(false, "整理失敗：" + e.getMessage()));
             }
         });
-    }
-
-    private void applyDuplicateAction(List<FileItem> items, DuplicateAction action,
-                                      Path targetDir, boolean dryRun) {
-        for (FileItem item : items) {
-            if (item.getStatus() != FileStatus.DUPLICATE) continue;
-
-            switch (action) {
-                case ISOLATE_IN_CATEGORY -> {
-                    Path dest = item.getDestinationPath();
-                    if (dest != null) {
-                        Path categoryDir = dest.getParent();
-                        item.setDestinationPath(
-                            categoryDir.resolve("重複檔案").resolve(item.getFileName()));
-                    }
-                    item.setStatus(FileStatus.PENDING);
-                }
-                case ISOLATE_ALL -> {
-                    if (targetDir != null) {
-                        item.setDestinationPath(
-                            targetDir.resolve("重複檔案").resolve(item.getFileName()));
-                    }
-                    item.setStatus(FileStatus.PENDING);
-                }
-                case DELETE_ALL -> {
-                    if (!dryRun) {
-                        try {
-                            Files.deleteIfExists(item.getSourcePath());
-                        } catch (IOException e) {
-                            System.err.println("[錯誤] 刪除重複檔失敗：" + item.getFileName()
-                                    + " -> " + e.getMessage());
-                        }
-                    }
-                    item.setStatus(FileStatus.SKIPPED);
-                }
-            }
-        }
     }
 
     // =========================================================
@@ -182,13 +132,11 @@ public class OrganizerFacade {
     // =========================================================
 
     public void undoAsync(Runnable onDone) {
-        setBusy(true, "[系統] 復原上一次操作中...");
+        setBusy(true, "復原中...");
         Thread.ofVirtual().start(() -> {
             boolean ok = moveService.undoLast();
             Platform.runLater(() -> {
-                setBusy(false, ok
-                    ? "[系統] 復原完成，所有檔案已移回原位"
-                    : "[資訊] 沒有可復原的操作（尚未執行整理，或已復原過）");
+                setBusy(false, ok ? "已復原上次操作" : "無法復原（無紀錄）");
                 if (onDone != null) onDone.run();
             });
         });
@@ -200,16 +148,16 @@ public class OrganizerFacade {
 
     public void startWatch(Path directory) {
         watchService.setOnNewFileDetected(newFile -> {
-            setStatus("[監控] 偵測到新檔案：" + newFile.getFileName() + "，重新掃描中...");
+            setStatus("偵測到新檔案：" + newFile.getFileName());
             scanAsync(directory, null);
         });
         watchService.startWatch(directory);
-        setStatus("[系統] 即時監控已啟動：" + directory.getFileName());
+        setStatus("即時監控已啟動：" + directory.getFileName());
     }
 
     public void stopWatch() {
         watchService.stopWatch();
-        setStatus("[系統] 即時監控已停止");
+        setStatus("即時監控已停止");
     }
 
     public void shutdown() {
@@ -225,7 +173,7 @@ public class OrganizerFacade {
     }
 
     // =========================================================
-    // 日誌查詢
+    // 日誌
     // =========================================================
 
     public List<OrganizeResult> getRecentLogs(int limit) {
@@ -234,7 +182,7 @@ public class OrganizerFacade {
 
     public void clearLogs() {
         logService.clearAll();
-        setStatus("[系統] 日誌已清除");
+        setStatus("日誌已清除");
     }
 
     // =========================================================
@@ -259,10 +207,9 @@ public class OrganizerFacade {
     }
 
     private String buildSummary(OrganizeResult r, boolean dryRun) {
-        String prefix = dryRun ? "[預覽] " : "[完成] ";
-        return String.format(
-            "%s已處理 %d 個檔案 — 搬移 %d、略過 %d、重複 %d、失敗 %d",
-            prefix, r.getTotalCount(), r.getMovedCount(),
-            r.getSkippedCount(), r.getDuplicateCount(), r.getFailedCount());
+        String prefix = dryRun ? "[預覽] " : "";
+        return String.format("%s已處理 %d 個檔案 — 搬移 %d、略過 %d、重複 %d、失敗 %d",
+                prefix, r.getTotalCount(), r.getMovedCount(),
+                r.getSkippedCount(), r.getDuplicateCount(), r.getFailedCount());
     }
 }

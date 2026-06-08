@@ -15,21 +15,22 @@ import java.util.stream.Collectors;
 
 public class DiskAnalysisServiceImpl implements DiskAnalysisService {
 
+    // 副檔名 → 類別對應表
     private static final Map<String, String> EXT_MAP = Map.ofEntries(
-        Map.entry("jpg",  "圖片"), Map.entry("jpeg", "圖片"),
-        Map.entry("png",  "圖片"), Map.entry("gif",  "圖片"),
+        Map.entry("jpg", "圖片"), Map.entry("jpeg", "圖片"),
+        Map.entry("png", "圖片"), Map.entry("gif", "圖片"),
         Map.entry("webp", "圖片"), Map.entry("heic", "圖片"),
-        Map.entry("mp4",  "影片"), Map.entry("mov",  "影片"),
-        Map.entry("avi",  "影片"), Map.entry("mkv",  "影片"),
-        Map.entry("mp3",  "音樂"), Map.entry("wav",  "音樂"),
-        Map.entry("flac", "音樂"), Map.entry("aac",  "音樂"),
-        Map.entry("pdf",  "文件"), Map.entry("docx", "文件"),
+        Map.entry("mp4", "影片"), Map.entry("mov", "影片"),
+        Map.entry("avi", "影片"), Map.entry("mkv", "影片"),
+        Map.entry("mp3", "音樂"), Map.entry("wav", "音樂"),
+        Map.entry("flac", "音樂"), Map.entry("aac", "音樂"),
+        Map.entry("pdf", "文件"), Map.entry("docx", "文件"),
         Map.entry("xlsx", "文件"), Map.entry("pptx", "文件"),
-        Map.entry("txt",  "文件"),
+        Map.entry("txt", "文件"),
         Map.entry("java", "程式碼"), Map.entry("py", "程式碼"),
-        Map.entry("js",   "程式碼"), Map.entry("ts", "程式碼"),
-        Map.entry("zip",  "壓縮檔"), Map.entry("rar", "壓縮檔"),
-        Map.entry("7z",   "壓縮檔"), Map.entry("tar", "壓縮檔")
+        Map.entry("js", "程式碼"), Map.entry("ts", "程式碼"),
+        Map.entry("zip", "壓縮檔"), Map.entry("rar", "壓縮檔"),
+        Map.entry("7z", "壓縮檔"), Map.entry("tar", "壓縮檔")
     );
 
     private static final Map<String, String> COLOR_MAP = Map.of(
@@ -45,13 +46,16 @@ public class DiskAnalysisServiceImpl implements DiskAnalysisService {
     private final ExecutorService executor = Executors.newWorkStealingPool();
 
     @Override
-    public CompletableFuture<DiskStats> analyze(Path root, Consumer<Long> onProgress) {
+    public CompletableFuture<DiskStats> analyze(Path root,
+                                                Consumer<Long> onProgress) {
         return CompletableFuture.supplyAsync(() -> {
 
-            Map<String, Long>    catBytes = new ConcurrentHashMap<>();
+            // category → 總 bytes
+            Map<String, Long>  catBytes = new ConcurrentHashMap<>();
+            // category → 檔案數
             Map<String, Integer> catCount = new ConcurrentHashMap<>();
-            AtomicLong totalBytes = new AtomicLong();
-            AtomicLong totalCount = new AtomicLong();
+            AtomicLong totalBytes  = new AtomicLong();
+            AtomicLong totalCount  = new AtomicLong();
 
             try {
                 Files.walk(root)
@@ -61,11 +65,14 @@ public class DiskAnalysisServiceImpl implements DiskAnalysisService {
                          try {
                              long size = Files.size(file);
                              String cat = classify(file);
+
                              totalBytes.addAndGet(size);
                              catBytes.merge(cat, size, Long::sum);
                              catCount.merge(cat, 1, Integer::sum);
+
                              long n = totalCount.incrementAndGet();
                              if (n % 200 == 0) onProgress.accept(n);
+
                          } catch (IOException ignored) {}
                      });
             } catch (IOException e) {
@@ -100,7 +107,7 @@ public class DiskAnalysisServiceImpl implements DiskAnalysisService {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path entry : stream) {
                 if (Files.isDirectory(entry)) {
-                    FolderStats child = buildNode(entry);
+                    FolderStats child = buildNode(entry);  // 遞迴
                     children.add(child);
                     dirBytes.addAndGet(child.bytes());
                     dirCount.addAndGet(child.fileCount());
@@ -113,7 +120,9 @@ public class DiskAnalysisServiceImpl implements DiskAnalysisService {
             }
         } catch (IOException ignored) {}
 
+        // 子資料夾按大小排序
         children.sort(Comparator.comparingLong(FolderStats::bytes).reversed());
+
         return new FolderStats(dir, dirBytes.get(), dirCount.get(), children);
     }
 
