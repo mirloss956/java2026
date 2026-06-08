@@ -9,6 +9,7 @@ import com.fileorganizer.util.FileSizeUtil;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.TransferMode;
@@ -31,6 +32,10 @@ public class MainController {
     @FXML private Label                           lblDropHint;
     @FXML private HBox                            scanningIndicator;
     @FXML private Label                           lblScanningHint;
+
+    // ── A 自己實作的進階功能組件 ─────────────────────────────────────────────
+    @FXML private TextField txtSearch;      // 搜尋輸入框
+    @FXML private Button btnSearch;        // 搜尋按鈕
 
     @FXML private Button                          btnScan;
     @FXML private Button                          btnOrganize;
@@ -155,6 +160,11 @@ public class MainController {
             lblStatus.appendText("[系統] 就緒。請拖曳資料夾或點擊選擇資料夾。\n");
         }
 
+        // ── 綁定全文搜尋輸入框的 Enter 事件 ──────────────────────────────────────
+        if (txtSearch != null) {
+            txtSearch.setOnAction(event -> handleSearch(null));
+        }
+
         // 初始狀態
         setState(AppState.NO_FOLDER);
     }
@@ -257,6 +267,117 @@ public class MainController {
                 lblStatus.appendText("[錯誤] 無法開啟磁碟分析視窗：" + e.getMessage() + "\n");
             e.printStackTrace();
         }
+    }
+
+    // ── A 獨立實作：全文檢索與 pHash 相似圖片偵測 ─────────────────────────────────
+    @FXML
+    void handleSearch(ActionEvent event) {
+        if (txtSearch == null) return;
+
+        String keyword = txtSearch.getText().trim();
+        if (keyword.isEmpty()) {
+            if (lblStatus != null) lblStatus.appendText("[提示] 請輸入關鍵字再進行全文檢索。\n");
+            return;
+        }
+
+        if (currentDirectory == null) {
+            if (lblStatus != null) lblStatus.appendText("[警告] 請先選擇或拖曳一個目標資料夾！\n");
+            return;
+        }
+
+        File folder = currentDirectory.toFile();
+        if (!folder.exists() || !folder.isDirectory()) return;
+
+        if (lblStatus != null) {
+            lblStatus.appendText(String.format("\n🔍 [A 的黑科技啟動] 正在深層檢索「%s」內文與圖片特徵...\n", folder.getName()));
+        }
+
+        // 清空當前表格，準備注入你搜尋到的真實結果
+        fileTable.getItems().clear();
+
+        // 為了避免大檔案讀取導致 UI 卡死，開闢獨立執行緒處理
+        new Thread(() -> {
+            File[] files = folder.listFiles();
+            if (files == null) return;
+
+            java.util.List<FileItem> matchResults = new java.util.ArrayList<>();
+            java.util.List<File> imageFiles = new java.util.ArrayList<>();
+
+            for (File file : files) {
+                if (file.isDirectory()) continue;
+                String filename = file.getName().toLowerCase();
+
+                // 📄 1. 全文檢索 (.txt, .md, .docx, .pdf)
+                if (filename.endsWith(".txt") || filename.endsWith(".md") || filename.endsWith(".docx") || filename.endsWith(".pdf")) {
+                    String content = com.fileorganizer.util.FileTextExtractor.extractText(file);
+
+                    if (content != null && content.contains(keyword)) {
+                        int index = content.indexOf(keyword);
+                        int start = Math.max(0, index - 15);
+                        int end = Math.min(content.length(), index + keyword.length() + 15);
+                        String snippet = content.substring(start, end).replace("\n", " ").trim();
+
+                        Platform.runLater(() -> {
+                            if (lblStatus != null) {
+                                lblStatus.appendText(String.format("🎯 [內文匹配] 在《%s》內發現關鍵字！\n   👉 \"...%s...\"\n", file.getName(), snippet));
+                            }
+                        });
+
+                        // 使用小組正式的 FileItem 規格建立實體
+                        FileItem matchItem = new FileItem(file.toPath(), file.length(), java.time.LocalDateTime.now());
+                        matchItem.setStatus(com.fileorganizer.model.FileStatus.PENDING);
+                        matchResults.add(matchItem);
+                    }
+                }
+
+                // 收集圖片以便後續進行 pHash 相似度比對
+                if (filename.endsWith(".jpg") || filename.endsWith(".jpeg") || filename.endsWith(".png")) {
+                    imageFiles.add(file);
+                }
+            }
+
+            // 📸 2. pHash 相似圖片偵測
+            if (imageFiles.size() > 1) {
+                Platform.runLater(() -> {
+                    if (lblStatus != null) lblStatus.appendText("[pHash 檢索] 正在計算目錄內所有圖片的感知雜湊值...\n");
+                });
+
+                for (int i = 0; i < imageFiles.size(); i++) {
+                    for (int j = i + 1; j < imageFiles.size(); j++) {
+                        File imgA = imageFiles.get(i);
+                        File imgB = imageFiles.get(j);
+
+                        String hashA = com.fileorganizer.util.ImagePHash.getPHash(imgA);
+                        String hashB = com.fileorganizer.util.ImagePHash.getPHash(imgB);
+
+                        double similarity = com.fileorganizer.util.ImagePHash.calculateSimilarity(hashA, hashB);
+
+                        // 相似度大於 85% 判定為驚人相似
+                        if (similarity >= 0.85) {
+                            Platform.runLater(() -> {
+                                if (lblStatus != null) {
+                                    lblStatus.appendText(String.format("⚠️ [圖片相似] 偵測到高度相似圖片！\n   🖼️ 圖片A: %s\n   🖼️ 圖片B: %s\n   📈 pHash 相似度: %.1f%%\n",
+                                            imgA.getName(), imgB.getName(), similarity * 100));
+                                }
+                            });
+
+                            FileItem dupImg = new FileItem(imgB.toPath(), imgB.length(), java.time.LocalDateTime.now());
+                            dupImg.setStatus(com.fileorganizer.model.FileStatus.DUPLICATE);
+                            if (!matchResults.contains(dupImg)) {
+                                matchResults.add(dupImg);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 將搜尋與比對結果刷新回小組的 fileTable
+            Platform.runLater(() -> {
+                fileTable.getItems().addAll(matchResults);
+                if (lblStatus != null) lblStatus.appendText("\n[完成] 全文檢索與視覺比對程序結束。\n");
+            });
+
+        }).start();
     }
 
     // ── 私有工具 ──────────────────────────────────────────────────────────────
