@@ -50,6 +50,25 @@
             </children>
         </HBox>
 
+        <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="section-box" style="-fx-background-color: #f8fafc; -fx-padding: 8px; -fx-background-radius: 5px; -fx-border-color: #e2e8f0; -fx-border-radius: 5px;">
+            <children>
+                <Label style="-fx-font-weight: bold; -fx-text-fill: #475569;" text="🔍 全文深度檢索：" />
+
+                <TextField fx:id="txtSearch"
+                           HBox.hgrow="ALWAYS"
+                           prefHeight="30.0"
+                           promptText="輸入關鍵字以檢索 .txt / .md / .docx / .pdf 內文段落，或自動比對目錄內相似圖片 (pHash)..." />
+
+                <Button fx:id="btnSearch"
+                        mnemonicParsing="false"
+                        onAction="#handleSearch"
+                        prefHeight="30.0"
+                        prefWidth="100.0"
+                        style="-fx-background-color: #3b82f6; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"
+                        text="搜尋內容" />
+            </children>
+        </HBox>
+
         <VBox fx:id="dropPane"
               alignment="CENTER"
               onDragDropped="#handleDragDropped"
